@@ -15,11 +15,13 @@ from alembic.config import Config
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from testcontainers.community.postgres import PostgresContainer
-from testcontainers.community.redis import RedisContainer
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 from app.config import Settings
 from app.llm.fake import FakeProvider
 from app.main import create_app
+from app.storage import ObjectStore
 
 ISSUER = "http://keycloak.test/realms/daleel"
 JWKS_URL = f"{ISSUER}/protocol/openid-connect/certs"
@@ -101,7 +103,12 @@ def database_urls(postgres: PostgresContainer) -> tuple[str, str]:
 
 @pytest.fixture(scope="session")
 def redis_url() -> Iterator[str]:
-    with RedisContainer("redis:7.4-alpine") as container:
+    redis = (
+        DockerContainer("redis:7.4-alpine")
+        .with_exposed_ports(6379)
+        .waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
+    )
+    with redis as container:
         host = container.get_container_host_ip()
         yield f"redis://{host}:{container.get_exposed_port(6379)}/0"
 
@@ -142,12 +149,39 @@ def provider() -> FakeProvider:
     return FakeProvider()
 
 
+class MemoryStore(ObjectStore):
+    """In-memory stand-in for MinIO (the worker's tests use a real one)."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, tuple[bytes, str]] = {}
+
+    async def ensure_bucket(self) -> None:
+        return None
+
+    async def put(self, key: str, data: bytes, content_type: str) -> None:
+        self.objects[key] = (data, content_type)
+
+    async def get(self, key: str) -> bytes:
+        return self.objects[key][0]
+
+    async def delete(self, key: str) -> None:
+        self.objects.pop(key, None)
+
+
+@pytest.fixture
+def store() -> MemoryStore:
+    return MemoryStore()
+
+
 @pytest.fixture
 async def app(
-    settings: Settings, jwks_transport: httpx.MockTransport, provider: FakeProvider
+    settings: Settings,
+    jwks_transport: httpx.MockTransport,
+    provider: FakeProvider,
+    store: MemoryStore,
 ) -> AsyncIterator[FastAPI]:
     async with httpx.AsyncClient(transport=jwks_transport) as http:
-        application = create_app(settings, http_client=http, provider=provider)
+        application = create_app(settings, http_client=http, provider=provider, store=store)
         async with application.router.lifespan_context(application):
             yield application
 

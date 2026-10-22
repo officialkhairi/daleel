@@ -2,18 +2,22 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import httpx
+from arq import create_pool
+from arq.connections import RedisSettings
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api import admin, chats, health, me, runs
+from app.api import admin, chats, documents, health, me, runs, ws
 from app.auth.jwks import JWKSCache, TokenVerifier
 from app.chat.tasks import TaskRegistry
 from app.config import Settings, get_settings
 from app.db.session import make_engine, make_sessionmaker
+from app.embeddings.factory import build_query_embedder
 from app.errors import ErrorEnvelope, install_error_handlers
 from app.llm.base import LLMProvider
 from app.llm.factory import build_provider
 from app.observability.logging import RequestIdMiddleware, configure_logging
+from app.storage import ObjectStore
 from app.streaming.bus import RunBus
 
 
@@ -22,8 +26,9 @@ def create_app(
     *,
     http_client: httpx.AsyncClient | None = None,
     provider: LLMProvider | None = None,
+    store: ObjectStore | None = None,
 ) -> FastAPI:
-    """Tests inject `http_client` (JWKS from an in-process transport) and `provider`."""
+    """Tests inject `http_client` (JWKS from an in-process transport), `provider` and `store`."""
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
@@ -38,8 +43,13 @@ def create_app(
             min_refresh=settings.jwks_min_refresh_seconds,
         )
         redis = Redis.from_url(settings.redis_url, decode_responses=True)
+        arq = await create_pool(RedisSettings.from_dsn(settings.redis_url))
         tasks = TaskRegistry()
         app.state.settings = settings
+        app.state.redis = redis
+        app.state.arq = arq
+        app.state.store = store or ObjectStore.from_settings(settings)
+        app.state.embedder = build_query_embedder(settings, http, arq)
         app.state.engine = engine
         app.state.bus = RunBus(redis, ttl_seconds=settings.run_events_ttl_seconds)
         app.state.provider = provider or build_provider(settings, http)
@@ -52,6 +62,7 @@ def create_app(
             yield
         finally:
             await tasks.shutdown()
+            await arq.aclose()
             await redis.aclose()
             await engine.dispose()
             if http_client is None:
@@ -74,4 +85,6 @@ def create_app(
     app.include_router(admin.router)
     app.include_router(chats.router)
     app.include_router(runs.router)
+    app.include_router(documents.router)
+    app.include_router(ws.router)
     return app

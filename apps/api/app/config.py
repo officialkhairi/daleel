@@ -45,6 +45,30 @@ class Settings(BaseSettings):
     # Chat history sent to the model (most recent messages).
     chat_history_limit: int = 20
 
+    # Object storage (MinIO or any S3-compatible store).
+    s3_endpoint: str = "localhost:9000"
+    s3_access_key: str = ""
+    s3_secret_key: SecretStr = SecretStr("")
+    s3_bucket: str = "daleel"
+    s3_secure: bool = False
+    upload_max_bytes: int = 25 * 1024 * 1024
+
+    # "sentence_transformers" runs BAAI/bge-m3 in the worker (the API asks the worker to embed
+    # queries); "openai_compat" calls any /v1/embeddings endpoint (Ollama, TEI, vLLM, OpenAI);
+    # "fake" hashes words into vectors (tests, first run).
+    embeddings_provider: Literal["fake", "sentence_transformers", "openai_compat"] = "fake"
+    embeddings_model: str = "BAAI/bge-m3"
+    embeddings_base_url: str = ""
+    embeddings_api_key: SecretStr = SecretStr("")
+    embeddings_batch_size: int = 16
+    # How long the API waits for the worker to embed a query.
+    embeddings_query_timeout_seconds: float = 15.0
+
+    # Retrieval: candidates per method before fusion, results kept after it.
+    retrieval_candidates: int = 20
+    retrieval_top_k: int = 6
+    retrieval_rrf_k: int = 60
+
     log_level: str = "INFO"
 
 

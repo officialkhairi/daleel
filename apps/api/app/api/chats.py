@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
@@ -9,10 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from app.auth.deps import require
 from app.auth.principal import Principal
 from app.chat import repo
-from app.chat.runner import Pricing, execute_run
+from app.chat.runner import Pricing, Retriever, execute_run
 from app.chat.service import start_run
 from app.db.session import tenant_session
 from app.errors import NotFound
+from app.rag.retrieve import RetrievedChunk, retrieve
 from app.streaming.events import RunStarted
 from app.streaming.sse import sse_response
 
@@ -48,6 +49,9 @@ class MessageOut(BaseModel):
     role: Literal["user", "assistant", "tool"]
     content: str
     status: Literal["complete", "cancelled", "error"]
+    citations: list[dict[str, Any]] | None = Field(
+        default=None, description="Payloads of the `citation` events the answer produced."
+    )
     model: str | None
     tokens_in: int | None
     tokens_out: int | None
@@ -112,6 +116,25 @@ async def delete(
     return Response(status_code=204)
 
 
+def _retriever(state: Any, principal: Principal) -> Retriever:
+    """Retrieval bound to the caller: their tenant (RLS) and the documents their roles may read."""
+    settings = state.settings
+
+    async def search(question: str) -> list[RetrievedChunk]:
+        return await retrieve(
+            state.sessions,
+            tenant_id=principal.tenant_id,
+            roles=sorted(principal.roles),
+            query=question,
+            embedder=state.embedder,
+            candidates=settings.retrieval_candidates,
+            top_k=settings.retrieval_top_k,
+            rrf_k=settings.retrieval_rrf_k,
+        )
+
+    return search
+
+
 async def _run_and_stream(
     request: Request, principal: Principal, chat_id: uuid.UUID, content: str | None
 ) -> StreamingResponse:
@@ -136,6 +159,7 @@ async def _run_and_stream(
             pricing=Pricing(
                 state.settings.llm_price_in_per_mtok, state.settings.llm_price_out_per_mtok
             ),
+            retriever=_retriever(state, principal),
         ),
         name=f"run-{spec.run_id}",
     )

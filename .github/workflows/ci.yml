@@ -32,6 +32,26 @@ jobs:
       - name: pytest (Testcontainers Postgres)
         run: uv run pytest --cov --cov-report=term-missing
 
+  worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/worker/uv.lock
+      # Without the local-embeddings extra: tests use fake embeddings, so no PyTorch download.
+      - run: uv sync --frozen
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy
+      - name: pytest (Testcontainers Postgres, Redis, MinIO)
+        run: uv run pytest --cov --cov-report=term-missing
+
   web:
     runs-on: ubuntu-latest
     steps:

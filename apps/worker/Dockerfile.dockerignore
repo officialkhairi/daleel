@@ -1,0 +1,13 @@
+**/.venv
+**/__pycache__
+**/.mypy_cache
+**/.ruff_cache
+**/.pytest_cache
+**/tests
+.git
+.env
+node_modules
+apps/web
+packages
+docs
+deploy

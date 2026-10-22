@@ -2,6 +2,7 @@
 the user message stored) happens in one committed transaction; generation then runs in the
 background."""
 
+import re
 import uuid
 from dataclasses import dataclass
 
@@ -35,9 +36,15 @@ class StartedRun:
     user_message_id: uuid.UUID
 
 
+_CITATION_MARKS = re.compile(r"\s?\[\d{1,2}\]")
+
+
 def _history(messages: list[Message], language: Language) -> list[ChatMessage]:
+    # Earlier answers' [n] markers point at sources this turn's prompt doesn't have.
     turns = [
-        ChatMessage(role="user" if m.role == "user" else "assistant", content=m.content)
+        ChatMessage(role="user", content=m.content)
+        if m.role == "user"
+        else ChatMessage(role="assistant", content=_CITATION_MARKS.sub("", m.content))
         for m in messages
         if m.role in ("user", "assistant") and m.content
     ]
@@ -104,11 +111,14 @@ async def start_run(
         await session.flush()
         history = await repo.list_messages(session, chat.id, limit=history_limit)
 
+    language = _reply_language(user_message.content, principal)
     spec = RunSpec(
         run_id=run.id,
         chat_id=chat.id,
         tenant_id=principal.tenant_id,
         model=model,
-        history=_history(list(history), _reply_language(user_message.content, principal)),
+        history=_history(list(history), language),
+        question=user_message.content,
+        language=language,
     )
     return StartedRun(spec=spec, user_message_id=user_message.id)

@@ -3,6 +3,7 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -p daleel -f deploy/compose/docker-compose.yml --env-file .env
 API := cd apps/api &&
+WORKER := cd apps/worker &&
 PNPM := corepack pnpm
 
 .PHONY: help
@@ -18,7 +19,7 @@ help: ## Show targets
 # --wait treats exited one-shot jobs (migrate, minio-init) as failures, so wait on the
 # long-running services only; the jobs still run as their dependencies.
 up: .env ## Build and start the full stack, wait until healthy
-	$(COMPOSE) up -d --build --wait web mailpit redis
+	$(COMPOSE) up -d --build --wait web worker mailpit redis
 
 .PHONY: down
 down: ## Stop the stack (keeps volumes)
@@ -46,6 +47,7 @@ ps: ## Show service status
 .PHONY: install
 install: ## Install backend and frontend dependencies
 	$(API) uv sync
+	$(WORKER) uv sync
 	$(PNPM) install
 
 .PHONY: migrate
@@ -65,19 +67,25 @@ dev-web: ## Run the SPA on the host with Vite
 .PHONY: lint
 lint: ## ruff, mypy, eslint, tsc
 	$(API) uv run ruff check . && uv run ruff format --check . && uv run mypy
+	$(WORKER) uv run ruff check . && uv run ruff format --check . && uv run mypy
 	$(PNPM) -r run lint
 	$(PNPM) -r run typecheck
 
 .PHONY: fmt
 fmt: ## Auto-format
 	$(API) uv run ruff check --fix . && uv run ruff format .
+	$(WORKER) uv run ruff check --fix . && uv run ruff format .
 
 .PHONY: test
-test: test-api test-web ## Backend + frontend tests
+test: test-api test-worker test-web ## Backend + frontend tests
 
 .PHONY: test-api
 test-api:
 	$(API) uv run pytest
+
+.PHONY: test-worker
+test-worker:
+	$(WORKER) uv run pytest
 
 .PHONY: test-web
 test-web:
