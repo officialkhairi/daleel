@@ -1,0 +1,25 @@
+# env
+.env
+!.env.example
+
+# node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json
