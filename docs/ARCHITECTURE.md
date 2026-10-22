@@ -24,9 +24,40 @@ Browser (SPA) ──PKCE──▶ Keycloak (realm "daleel")
 - **Errors.** Every non-2xx response body is `ErrorEnvelope {code, message, retryable}`; unhandled exceptions
   are logged with the request id and returned as `internal_error`.
 
-## Known simplifications (Phase 1)
+## Phase 2: streaming chat
+
+```
+SPA ──POST /messages──▶ API ──start run (task)──▶ LLMProvider ──▶ model server
+ ▲                       │                            │
+ │   text/event-stream   │ XREAD                      │ XADD token…
+ └───────────────────────┴──────── Redis Stream run:{id}:events ◀┘
+```
+
+- **Run lifecycle.** `start_run` locks the chat row (one run per chat), stores the user message and a `runs`
+  row, and commits. The API publishes `run.started`, spawns `execute_run` as an asyncio task (held by
+  `TaskRegistry`), and returns an SSE response that reads the run's stream. The task streams the provider into
+  the stream, then saves the assistant message and the run's final status in one transaction, and publishes
+  `run.completed` last, so a client that sees it can refetch and find the saved message.
+- **Resume.** Redis Stream entry ids are the SSE `id`s. `GET /api/runs/{id}/events` replays after
+  `Last-Event-ID` (or from the start) and then blocks for new entries, sending a `: ping` comment every 15 s.
+  Streams expire `RUN_EVENTS_TTL_SECONDS` after their last write; after that the endpoint returns 410 and the
+  client reloads the chat from Postgres.
+- **Cancel.** `POST /api/runs/{id}/cancel` sets a Redis flag that the run checks every 200 ms. Any replica can
+  take the cancel; only the replica running the task needs to see the flag.
+- **Failure modes.** Provider errors (`LLMError`, classified as retryable or not), unexpected exceptions and
+  shutdown (`server_shutdown`) all end with `error` + `run.completed(finish_reason="error")`; text produced so far
+  is saved with `status="error"`. A run still marked `running` after 15 minutes is treated as abandoned.
+- **Providers.** `OpenAICompatProvider` parses the OpenAI SSE format by hand (text, usage, and tool-call fragments
+  re-assembled by index for Phase 4). `FakeProvider` replays scripted turns (JSON) or echoes; tests, CI and the
+  default stack use it, so no test calls a real model.
+
+## Known simplifications
 
 - One tenant per realm: `tenant` is a hard-coded claim (`acme`) on each client. Multi-tenant realms
   (Keycloak Organizations or a declared user-profile attribute) come with the admin console in Phase 5.
 - `/api/me` writes on every call to keep the profile fresh. Fine at this scale; revisit if it shows up in traces.
 - The SPA's OIDC settings are baked in at build time (`VITE_*`).
+- Runs execute inside the API process. An API restart ends in-flight runs with a retryable `server_shutdown`
+  error. Moving runs to the Arq worker is possible without changing the protocol, since clients only ever
+  read the Redis Stream.
+- Token usage comes from the provider; servers that don't report it produce no `usage` event.

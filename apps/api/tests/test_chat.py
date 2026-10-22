@@ -358,3 +358,24 @@ async def test_shutdown_mid_answer_records_retryable_error(
     detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
     assert detail["active_run_id"] is None
     assert detail["messages"][1]["status"] == "error"
+
+
+@pytest.mark.parametrize(
+    "turn", [[Finish(reason="stop")], [TextDelta(text=" \n "), Finish(reason="stop")]]
+)
+async def test_empty_answer_is_a_retryable_error(
+    client: httpx.AsyncClient, headers: dict[str, str], provider: FakeProvider, turn: list[Any]
+) -> None:
+    provider._turns = [turn]
+    chat_id = await new_chat(client, headers)
+    events = await send(client, headers, chat_id, "hi")
+
+    error = next(data for _, name, data in events if name == "error")
+    assert error == {
+        "code": "empty_answer",
+        "message": "The model returned an empty answer.",
+        "retryable": True,
+    }
+    assert events[-1][2] == {"message_id": None, "finish_reason": "error"}
+    detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
+    assert [m["role"] for m in detail["messages"]] == ["user"]
