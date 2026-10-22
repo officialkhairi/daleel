@@ -22,17 +22,51 @@ function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
   return typeof v.code === "string" && typeof v.message === "string" && typeof v.retryable === "boolean";
 }
 
-/** GET a JSON resource from the API with the caller's access token. Non-2xx responses throw ApiError. */
-export async function apiGet<T>(path: string, token: string, fetchImpl: typeof fetch = fetch): Promise<T> {
-  const response = await fetchImpl(path, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  });
-  const body: unknown = await response.json().catch(() => null);
+interface RequestOptions {
+  method?: "GET" | "POST" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  fetchImpl?: typeof fetch;
+}
+
+/** Sends a request with the caller's access token. Non-2xx responses throw ApiError. */
+export async function apiRequest(path: string, token: string, options: RequestOptions = {}): Promise<Response> {
+  const { method = "GET", body, headers = {}, signal, fetchImpl = fetch } = options;
+  const init: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...headers,
+    },
+  };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  if (signal) init.signal = signal;
+
+  const response = await fetchImpl(path, init);
   if (!response.ok) {
-    if (isErrorEnvelope(body)) {
-      throw new ApiError(response.status, body.code, body.message, body.retryable);
+    const payload: unknown = await response.json().catch(() => null);
+    if (isErrorEnvelope(payload)) {
+      throw new ApiError(response.status, payload.code, payload.message, payload.retryable);
     }
     throw new ApiError(response.status, "http_error", `Request failed (${response.status})`, response.status >= 500);
   }
-  return body as T;
+  return response;
+}
+
+/** GET a JSON resource from the API with the caller's access token. */
+export async function apiGet<T>(path: string, token: string, fetchImpl: typeof fetch = fetch): Promise<T> {
+  const response = await apiRequest(path, token, { fetchImpl });
+  return (await response.json()) as T;
+}
+
+export async function apiPost<T>(path: string, token: string, body: unknown = {}): Promise<T> {
+  const response = await apiRequest(path, token, { method: "POST", body });
+  return (await response.json()) as T;
+}
+
+export async function apiDelete(path: string, token: string): Promise<void> {
+  await apiRequest(path, token, { method: "DELETE" });
 }

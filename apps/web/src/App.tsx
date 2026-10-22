@@ -2,8 +2,8 @@ import { useTranslation } from "react-i18next";
 
 import { useAuth } from "./features/auth/AuthProvider";
 import { SignInScreen } from "./features/auth/SignInScreen";
-import { ProfileCard } from "./features/profile/ProfileCard";
-import { useMe } from "./features/profile/useMe";
+import { ChatPage } from "./features/chat/ChatPage";
+import { ProfileDialog } from "./features/profile/ProfileDialog";
 import { LanguageToggle } from "./LanguageToggle";
 
 function Loading() {
@@ -15,34 +15,13 @@ function Loading() {
   );
 }
 
-function Profile() {
-  const { t } = useTranslation();
-  const me = useMe();
-  if (me.isPending) return <Loading />;
-  if (me.isError) {
-    return (
-      <div role="alert" className="text-danger">
-        <p>{t("profile.loadFailed", { message: me.error.message })}</p>
-        <button
-          type="button"
-          onClick={() => void me.refetch()}
-          className="mt-3 rounded-md border border-line px-4 py-2 text-ink hover:bg-brand-soft"
-        >
-          {t("profile.retry")}
-        </button>
-      </div>
-    );
-  }
-  return <ProfileCard me={me.data} />;
-}
-
 function Shell() {
   const { t } = useTranslation();
   const { signOut } = useAuth();
   return (
-    <div className="min-h-dvh">
+    <div className="flex h-dvh flex-col">
       <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 sm:px-8">
+        <div className="flex items-center gap-4 px-4 py-3 sm:px-6">
           <span className="flex items-baseline gap-2 text-lg font-semibold text-brand">
             <span lang="ar">دليل</span>
             <span lang="en" className="text-ink">
@@ -51,6 +30,7 @@ function Shell() {
           </span>
           <div className="ms-auto flex items-center gap-2">
             <LanguageToggle />
+            <ProfileDialog />
             <button
               type="button"
               onClick={() => void signOut()}
@@ -61,9 +41,7 @@ function Shell() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
-        <Profile />
-      </main>
+      <ChatPage />
     </div>
   );
 }

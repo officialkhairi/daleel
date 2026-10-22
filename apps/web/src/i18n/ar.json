@@ -1,6 +1,10 @@
 {
-  "app": { "name": "دليل" },
-  "status": { "loading": "جارٍ التحميل…" },
+  "app": {
+    "name": "دليل"
+  },
+  "status": {
+    "loading": "جارٍ التحميل…"
+  },
   "signIn": {
     "lead": "اطرح أسئلتك على مستندات مؤسستك بالعربية أو الإنجليزية. كل إجابة تُظهر المقطع الذي استُمدّت منه.",
     "button": "تسجيل الدخول",
@@ -9,7 +13,8 @@
   "header": {
     "signOut": "تسجيل الخروج",
     "switchLanguage": "تغيير اللغة",
-    "otherLanguage": "English"
+    "otherLanguage": "English",
+    "profile": "الملف الشخصي"
   },
   "profile": {
     "email": "البريد الإلكتروني",
@@ -18,8 +23,40 @@
     "roles": "الأدوار",
     "noRoles": "لا توجد أدوار مُسندة إليك. اطلب الصلاحية من المسؤول.",
     "loadFailed": "تعذّر تحميل ملفك الشخصي: {{message}}",
-    "retry": "حاول مرة أخرى"
+    "retry": "حاول مرة أخرى",
+    "title": "ملفك الشخصي",
+    "description": "بيانات حسابك وأدوارك.",
+    "close": "إغلاق"
   },
-  "languages": { "en": "الإنجليزية", "ar": "العربية" },
-  "roles": { "viewer": "مُطّلع", "editor": "محرّر", "approver": "مُعتمِد", "admin": "مسؤول" }
+  "languages": {
+    "en": "الإنجليزية",
+    "ar": "العربية"
+  },
+  "roles": {
+    "viewer": "مُطّلع",
+    "editor": "محرّر",
+    "approver": "مُعتمِد",
+    "admin": "مسؤول"
+  },
+  "chat": {
+    "history": "المحادثات",
+    "newChat": "محادثة جديدة",
+    "untitled": "محادثة جديدة",
+    "noChats": "لا توجد محادثات بعد.",
+    "transcript": "المحادثة",
+    "emptyTitle": "اطرح سؤالًا",
+    "emptyBody": "اكتب بالعربية أو الإنجليزية. تظهر الإجابة أثناء كتابتها.",
+    "inputLabel": "الرسالة",
+    "placeholder": "اكتب سؤالك…",
+    "sendHint": "Enter للإرسال، وShift+Enter لسطر جديد",
+    "send": "إرسال",
+    "stop": "إيقاف",
+    "retry": "حاول مرة أخرى",
+    "stopped": "تم الإيقاف",
+    "you": "أنت",
+    "assistant": "دليل",
+    "reconnecting": "انقطع الاتصال. جارٍ إعادة الاتصال…",
+    "answerFailed": "لم تكتمل الإجابة: {{message}}",
+    "loadFailed": "تعذّر تحميل هذه المحادثة: {{message}}"
+  }
 }
