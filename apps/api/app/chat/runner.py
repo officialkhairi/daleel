@@ -103,6 +103,13 @@ async def execute_run(
         finish = "error"
         error = ErrorEvent(code="internal_error", message="Something went wrong.", retryable=True)
 
+    if error is None and finish != "cancelled" and not "".join(parts).strip():
+        # Small models sometimes stop at once or emit only whitespace; that is not an answer.
+        finish = "error"
+        error = ErrorEvent(
+            code="empty_answer", message="The model returned an empty answer.", retryable=True
+        )
+
     await _finish(spec, sessions, bus, parts, usage, finish, error, pricing)
 
 
@@ -132,7 +139,7 @@ async def _finish(
 
     async with tenant_session(sessions, spec.tenant_id) as session:
         # An error before any text leaves no assistant message; the client offers a retry.
-        if content or error is None:
+        if content.strip() or error is None:
             message = Message(
                 tenant_id=spec.tenant_id,
                 chat_id=spec.chat_id,
