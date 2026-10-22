@@ -51,6 +51,42 @@ SPA ──POST /messages──▶ API ──start run (task)──▶ LLMProvide
   re-assembled by index for Phase 4). `FakeProvider` replays scripted turns (JSON) or echoes; tests, CI and the
   default stack use it, so no test calls a real model.
 
+## Phase 3: documents, retrieval, citations
+
+```
+upload ─▶ API ─▶ MinIO + documents row ─▶ Arq job ─▶ worker: parse → chunk → embed → chunks (pgvector, tsvector)
+                                                        └─ progress ─▶ Redis pub/sub ─▶ API WebSocket ─▶ browser
+question ─▶ run ─▶ retrieve (vector ∥ keyword → RRF, role filter in SQL) ─▶ sources in prompt ─▶ model
+                    model tokens ─▶ citation filter ─▶ token + citation events ─▶ chips ─▶ PDF + highlight
+```
+
+- **Parsing keeps positions.** Every PDF block keeps its page and box (points, top-left origin), which become the
+  chunk's `bboxes` and later the highlight. Many PDFs store Arabic in visual order and map ligatures back to
+  their letters reversed, so mostly-Arabic lines are rebuilt from character positions (right to left, Latin and
+  numbers restored to their own order, ligature pairs kept together, diacritics dropped). Generators that lose
+  letters entirely (e.g. some lam-alef ligatures) still lose them; OCR would be the fix.
+- **Chunks** follow headings (never span two sections), aim for ~500 tokens, and repeat ~15% of the previous
+  chunk. The heading is embedded with the text and counted in keyword search.
+- **Retrieval** runs vector search (HNSW, cosine, iterative scans so filters don't starve results) and keyword
+  search (`tsvector` per chunk language; the query is stemmed as both English and Arabic, words OR'ed) in
+  parallel, then fuses them with reciprocal rank fusion (k = 60) and keeps 6. Both queries filter
+  `documents.acl_roles && user roles` and `status = 'ready'`; RLS adds the tenant. If the embedding model is
+  unavailable, keyword search still answers.
+- **Embeddings for queries** come from the same model as documents. With `sentence_transformers` the model lives
+  only in the worker; the API enqueues an `embed_texts` job and waits for its result (polled every 20 ms), so the
+  API image has no PyTorch.
+- **Prompt.** Sources are numbered `<source n="…" title="…" page="…">` blocks appended to the system prompt; their
+  text is HTML-escaped so a document can't close the tag and pose as instructions.
+- **Citations.** A streaming filter holds back a possible `[n]` until it is complete, drops numbers that weren't
+  retrieved (counted in `runs.state.dropped_citations`), and emits a `citation` event the first time each source
+  is cited. The answer is saved with its citations, so they survive reloads.
+- **Viewer.** The SPA fetches the original file with the user's token (same role check), renders the cited page
+  with pdf.js, and draws the boxes over it. PDF coordinates are physical, so the viewer stays LTR inside an
+  Arabic layout.
+- **Progress.** The worker publishes to `tenant:{id}:documents`; the WebSocket (authenticated by its first
+  message, never the URL) forwards only events for documents the viewer's roles may see, and closes when the
+  token expires.
+
 ## Known simplifications
 
 - One tenant per realm: `tenant` is a hard-coded claim (`acme`) on each client. Multi-tenant realms
@@ -61,3 +97,6 @@ SPA ──POST /messages──▶ API ──start run (task)──▶ LLMProvide
   error. Moving runs to the Arq worker is possible without changing the protocol, since clients only ever
   read the Redis Stream.
 - Token usage comes from the provider; servers that don't report it produce no `usage` event.
+- Object storage uses the MinIO root credentials locally; production would use a scoped access key.
+- Scanned PDFs (no text layer) fail with a clear message; there is no OCR.
+- No reranker yet: fusion output goes straight to the prompt.

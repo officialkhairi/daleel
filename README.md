@@ -9,8 +9,8 @@ The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six ga
 | --- | --- | --- |
 | 1 | Foundations: monorepo, compose stack, Keycloak SSO, `/api/me`, CI | Done |
 | 2 | Streaming chat over SSE through a provider-agnostic `LLMProvider` | Done |
-| 3 | RAG ingestion, hybrid retrieval, citations, PDF highlight | Next |
-| 4 | Agent loop with human approvals, audit log | |
+| 3 | RAG ingestion, hybrid retrieval, citations, PDF highlight | Done |
+| 4 | Agent loop with human approvals, audit log | Next |
 | 5 | RBAC/ACL everywhere, admin console, observability, Storybook | |
 | 6 | Evals in CI, Helm, release, live demo | |
 
@@ -43,6 +43,30 @@ Open <http://localhost:5173> and sign in. Demo users (local only, password `demo
 Keycloak runs on 8180, not 8080, because 8080 is often taken. Change `KEYCLOAK_PORT` and the URLs that use it in
 `.env` if needed.
 
+## Documents and citations
+
+Editors and admins upload PDF or Word files on the **Documents** page and choose which roles may see each one.
+The worker parses the file (keeping each passage's page and position), splits it into ~500-token chunks under
+their headings, embeds them, and indexes them for vector and keyword search; progress streams to the page.
+
+Every answer is grounded in the six best passages the asker is allowed to read. Sources appear as numbered
+chips: hover for the excerpt, click to open the PDF at that page with the passage highlighted. Citations to
+anything that wasn't retrieved are removed before they reach you.
+
+Demo documents (fictional company) are in [docs/demo](docs/demo): an Arabic procurement policy and an English
+security policy.
+
+### Choosing an embedding model
+
+| `EMBEDDINGS_PROVIDER` | What it does |
+| --- | --- |
+| `fake` (default) | Hashes words into vectors: works offline, behaves like keyword search |
+| `sentence_transformers` | Runs `BAAI/bge-m3` in the worker (downloads ~2.3 GB on first start). Multilingual: an English question finds Arabic passages |
+| `openai_compat` | Any `/v1/embeddings` server, e.g. Ollama with `bge-m3` (`EMBEDDINGS_BASE_URL=http://ollama:11434/v1`, `EMBEDDINGS_MODEL=bge-m3`) |
+
+Switching provider or model requires re-uploading documents, because vectors from different models can't be
+compared.
+
 ## Choosing a model
 
 `make up` starts with `LLM_PROVIDER=fake`, which streams "You said: …" so everything works without a model.
@@ -68,7 +92,8 @@ make infra     # backing services only
 make dev-api   # API on :8000 with reload (runs migrations first)
 make dev-web   # Vite on :5173, proxies /api to :8000
 make lint      # ruff, mypy, eslint, tsc
-make test      # pytest (Testcontainers Postgres) + vitest
+make test      # pytest (Testcontainers Postgres, Redis, MinIO) + vitest
+make e2e       # Playwright against the stack, with the fake LLM (then `make up` to restore .env)
 make down      # stop; `make nuke` also deletes volumes
 ```
 
@@ -101,8 +126,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [ADR 0002](docs/adr/0002-ss
 
 ```
 apps/api         FastAPI: auth/, db/ (Alembic), api/, llm/ (provider contract), observability/
-apps/web         React 19 + Vite SPA (features/auth, features/profile, i18n/)
+apps/worker      Arq jobs: parsing (PyMuPDF, python-docx), chunking, embeddings
+apps/web         React 19 + Vite SPA (features/chat, documents, citations, auth, profile)
+e2e              Playwright end-to-end tests
 packages/ui      Design tokens (Tailwind v4 theme)
 deploy/compose   docker-compose.yml, Keycloak realm, Postgres init
-docs             PLAN.md, ARCHITECTURE.md, adr/
+docs             PLAN.md, ARCHITECTURE.md, adr/, demo/ (sample policies)
 ```

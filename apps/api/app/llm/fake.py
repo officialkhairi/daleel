@@ -1,7 +1,9 @@
 """Deterministic provider for tests, e2e and running the stack without a model."""
 
 import asyncio
+import html
 import json
+import re
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -38,11 +40,21 @@ ScriptEvent = Annotated[
 _TURNS = TypeAdapter(list[list[ScriptEvent]])
 
 
+_FIRST_SOURCE = re.compile(r'<source n="1"[^>]*>\n(.*?)\n</source>', re.DOTALL)
+
+
 def echo_turn(messages: Sequence[ChatMessage]) -> list[ScriptEvent]:
-    """'You said: …' streamed word by word, with whitespace-count token usage."""
+    """'You said: …' streamed word by word, with whitespace-count token usage. When the prompt
+    carries sources, it quotes the start of source 1 and cites it, so citations work end to end
+    (demo, e2e) without a model."""
     last = next((m.content for m in reversed(messages) if m.role == "user"), "")
     last = strip_reply_note(last)  # echo the question as the user typed it
-    words = f"You said: {last}".split(" ")
+    source = _FIRST_SOURCE.search(messages[0].content) if messages else None
+    if source:
+        excerpt = " ".join(html.unescape(source.group(1)).split()[:24])
+        words = f"From the documents: {excerpt} [1]".split(" ")
+    else:
+        words = f"You said: {last}".split(" ")
     events: list[ScriptEvent] = [
         TextDelta(text=w if i == len(words) - 1 else f"{w} ") for i, w in enumerate(words)
     ]

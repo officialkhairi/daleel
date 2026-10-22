@@ -6,14 +6,22 @@ import type { ChatMessage } from "./api";
 import { ChatView } from "./ChatView";
 import type { RunState } from "./useChatRun";
 
-const idle: RunState = { streaming: false, runId: null, question: null, draft: "", reconnecting: false, error: null };
+const idle: RunState = {
+  streaming: false,
+  runId: null,
+  question: null,
+  draft: "",
+  citations: [],
+  reconnecting: false,
+  error: null,
+};
 
 function message(role: ChatMessage["role"], content: string, status: ChatMessage["status"] = "complete"): ChatMessage {
   return { id: `${role}-${content}`, role, content, status, model: null, tokens_in: null, tokens_out: null, created_at: "" };
 }
 
 function renderView(messages: ChatMessage[], run: RunState = idle) {
-  const handlers = { onSend: vi.fn(), onStop: vi.fn(), onRetry: vi.fn() };
+  const handlers = { onSend: vi.fn(), onStop: vi.fn(), onRetry: vi.fn(), onCite: vi.fn() };
   render(<ChatView messages={messages} run={run} {...handlers} />);
   return handlers;
 }

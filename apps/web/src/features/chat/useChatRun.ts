@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, apiRequest } from "../../lib/api";
 import { useAccessToken } from "../auth/AuthProvider";
 import { chatKeys } from "./api";
+import type { Citation } from "../citations/types";
 import { followRun, type RunEvent } from "./stream";
 
 export interface RunError {
@@ -18,6 +19,7 @@ export interface RunState {
   /** The question being answered, shown until the saved messages are refetched. */
   question: string | null;
   draft: string;
+  citations: Citation[];
   reconnecting: boolean;
   error: RunError | null;
 }
@@ -27,6 +29,7 @@ const IDLE: RunState = {
   runId: null,
   question: null,
   draft: "",
+  citations: [],
   reconnecting: false,
   error: null,
 };
@@ -78,6 +81,12 @@ export function useChatRun(chatId: string | null) {
               return { ...s, runId: event.run_id, reconnecting: false };
             case "token":
               return { ...s, draft: s.draft + event.text, reconnecting: false };
+            case "citation": {
+              const { type: _event, ...citation } = event;
+              // A resumed stream replays from the start; keep each source once.
+              if (s.citations.some((c) => c.n === citation.n)) return s;
+              return { ...s, citations: [...s.citations, citation] };
+            }
             case "error":
               return { ...s, error: { code: event.code, message: event.message, retryable: event.retryable } };
             default:

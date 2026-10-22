@@ -58,5 +58,64 @@
     "reconnecting": "Connection lost. Reconnecting…",
     "answerFailed": "The answer didn't finish: {{message}}",
     "loadFailed": "Couldn't load this chat: {{message}}"
+  },
+  "nav": {
+    "label": "Main",
+    "chat": "Chat",
+    "documents": "Documents"
+  },
+  "documents": {
+    "heading": "Documents",
+    "lead": "Answers in chat come from these documents, cited to the passage.",
+    "uploadHeading": "Add a document",
+    "dropHint": "Drop a file here, or choose one",
+    "fileTypes": "PDF or Word (.docx), up to 25 MB",
+    "titleLabel": "Title (optional)",
+    "titlePlaceholder": "Defaults to the file name",
+    "accessLabel": "Who can see it",
+    "adminAlways": "Admins always have access.",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "empty": "No documents yet.",
+    "loadFailed": "Couldn't load documents: {{message}}",
+    "everyone": "Everyone",
+    "pages_one": "{{count}} page",
+    "pages_other": "{{count}} pages",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete “{{title}}”?",
+    "deleteBody": "Its passages will stop appearing in answers. This can't be undone.",
+    "columns": {
+      "title": "Title",
+      "status": "Status",
+      "details": "Details",
+      "access": "Access",
+      "actions": "Actions"
+    },
+    "status": {
+      "ready": "Ready",
+      "failed": "Failed",
+      "queued": "Queued",
+      "processing": "Processing"
+    }
+  },
+  "citations": {
+    "open": "Source {{n}}: {{where}}",
+    "titlePage": "{{title}}, page {{page}}",
+    "close": "Close",
+    "pageOf": "Page {{page}} of {{count}}",
+    "spans": "passage on pages {{pages}}",
+    "pages": "Pages",
+    "previous": "Previous page",
+    "next": "Next page",
+    "backToPassage": "Back to the passage",
+    "loadingPdf": "Loading document…",
+    "pdfFailed": "This PDF couldn't be displayed.",
+    "fileFailed": "Couldn't open the document: {{message}}"
+  },
+  "errors": {
+    "crashTitle": "Something went wrong on this page",
+    "crashBody": "Your chats and documents are safe. Reload to continue.",
+    "reload": "Reload"
   }
 }

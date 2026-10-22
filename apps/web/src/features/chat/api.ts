@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { apiGet } from "../../lib/api";
 import { useAccessToken } from "../auth/AuthProvider";
+import type { Citation } from "../citations/types";
 
 export interface ChatSummary {
   id: string;
@@ -16,6 +17,7 @@ export interface ChatMessage {
   role: "user" | "assistant" | "tool";
   content: string;
   status: "complete" | "cancelled" | "error";
+  citations?: Citation[] | null;
   model: string | null;
   tokens_in: number | null;
   tokens_out: number | null;
