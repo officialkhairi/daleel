@@ -15,8 +15,10 @@ help: ## Show targets
 # --- stack ---------------------------------------------------------------
 
 .PHONY: up
+# --wait treats exited one-shot jobs (migrate, minio-init) as failures, so wait on the
+# long-running services only; the jobs still run as their dependencies.
 up: .env ## Build and start the full stack, wait until healthy
-	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) up -d --build --wait web mailpit redis
 
 .PHONY: down
 down: ## Stop the stack (keeps volumes)
@@ -28,7 +30,8 @@ nuke: ## Stop the stack and delete volumes
 
 .PHONY: infra
 infra: .env ## Start only backing services (for make dev-api / dev-web)
-	$(COMPOSE) up -d --wait postgres redis minio minio-init keycloak mailpit
+	$(COMPOSE) up -d --wait postgres redis minio keycloak mailpit
+	$(COMPOSE) up minio-init
 
 .PHONY: logs
 logs: ## Tail logs

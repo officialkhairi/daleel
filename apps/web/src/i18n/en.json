@@ -1,0 +1,25 @@
+{
+  "app": { "name": "Daleel" },
+  "status": { "loading": "Loading…" },
+  "signIn": {
+    "lead": "Ask your organisation's documents questions in Arabic or English. Every answer shows the passage it came from.",
+    "button": "Sign in",
+    "failed": "Sign-in didn't complete. Try again."
+  },
+  "header": {
+    "signOut": "Sign out",
+    "switchLanguage": "Switch language",
+    "otherLanguage": "العربية"
+  },
+  "profile": {
+    "email": "Email",
+    "organisation": "Organisation",
+    "language": "Language",
+    "roles": "Roles",
+    "noRoles": "No roles assigned. Ask an administrator for access.",
+    "loadFailed": "Couldn't load your profile: {{message}}",
+    "retry": "Try again"
+  },
+  "languages": { "en": "English", "ar": "Arabic" },
+  "roles": { "viewer": "Viewer", "editor": "Editor", "approver": "Approver", "admin": "Admin" }
+}
