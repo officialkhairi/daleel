@@ -1,15 +1,17 @@
 import { ApiError } from "../../lib/api";
 import { readSse, type SseEvent } from "../../lib/sse";
+import type { Citation } from "../citations/types";
 
 /** The SSE protocol from docs/PLAN.md. Every run ends with exactly one `run.completed`. */
 export type RunEvent =
   | { type: "run.started"; run_id: string; model: string }
   | { type: "token"; text: string }
   | { type: "usage"; tokens_in: number; tokens_out: number; cost_usd: number }
+  | ({ type: "citation" } & Citation)
   | { type: "error"; code: string; message: string; retryable: boolean }
   | { type: "run.completed"; message_id: string | null; finish_reason: string };
 
-const KNOWN = new Set<RunEvent["type"]>(["run.started", "token", "usage", "error", "run.completed"]);
+const KNOWN = new Set<RunEvent["type"]>(["run.started", "token", "citation", "usage", "error", "run.completed"]);
 
 function toRunEvent(sse: SseEvent): RunEvent | null {
   if (!KNOWN.has(sse.event as RunEvent["type"])) return null; // forward-compatible: skip unknown events

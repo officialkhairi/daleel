@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { Citation } from "../citations/types";
 import type { ChatMessage } from "./api";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
@@ -12,6 +13,7 @@ interface ChatViewProps {
   onSend: (content: string) => void;
   onStop: () => void;
   onRetry: () => void;
+  onCite: (citation: Citation) => void;
 }
 
 function UserMessage({ content }: { content: string }) {
@@ -28,7 +30,15 @@ function UserMessage({ content }: { content: string }) {
   );
 }
 
-function AssistantMessage({ content, status, busy }: { content: string; status: ChatMessage["status"]; busy?: boolean }) {
+interface AssistantMessageProps {
+  content: string;
+  status: ChatMessage["status"];
+  citations: Citation[];
+  onCite: (citation: Citation) => void;
+  busy?: boolean;
+}
+
+function AssistantMessage({ content, status, citations, onCite, busy }: AssistantMessageProps) {
   const { t } = useTranslation();
   return (
     <li>
@@ -42,7 +52,7 @@ function AssistantMessage({ content, status, busy }: { content: string; status: 
         aria-live={busy ? "polite" : undefined}
         aria-busy={busy}
       >
-        <Markdown text={content} />
+        <Markdown text={content} citations={citations} onCite={onCite} />
         {busy && <span className="ms-0.5 inline-block h-4 w-2 animate-pulse bg-brand align-middle" aria-hidden />}
       </div>
       {status === "cancelled" && <p className="mt-1 text-sm text-muted">{t("chat.stopped")}</p>}
@@ -50,7 +60,7 @@ function AssistantMessage({ content, status, busy }: { content: string; status: 
   );
 }
 
-export function ChatView({ messages, run, onSend, onStop, onRetry }: ChatViewProps) {
+export function ChatView({ messages, run, onSend, onStop, onRetry, onCite }: ChatViewProps) {
   const { t } = useTranslation();
   const end = useRef<HTMLDivElement>(null);
   const last = messages.at(-1);
@@ -77,11 +87,19 @@ export function ChatView({ messages, run, onSend, onStop, onRetry }: ChatViewPro
               m.role === "user" ? (
                 <UserMessage key={m.id} content={m.content} />
               ) : (
-                <AssistantMessage key={m.id} content={m.content} status={m.status} />
+                <AssistantMessage
+                  key={m.id}
+                  content={m.content}
+                  status={m.status}
+                  citations={m.citations ?? []}
+                  onCite={onCite}
+                />
               ),
             )}
             {run.question !== null && <UserMessage content={run.question} />}
-            {run.streaming && <AssistantMessage content={run.draft} status="complete" busy />}
+            {run.streaming && (
+              <AssistantMessage content={run.draft} status="complete" citations={run.citations} onCite={onCite} busy />
+            )}
           </ol>
         )}
         <div className="mx-auto max-w-3xl">

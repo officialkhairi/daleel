@@ -254,3 +254,21 @@ async def test_no_documents_means_no_sources(
     )
     assert "citation" not in names(events)
     assert "<sources>" not in provider.calls[0][0].content
+
+
+async def test_fake_provider_cites_when_sources_are_present(
+    app: FastAPI, client: httpx.AsyncClient, make_token: TokenFactory
+) -> None:
+    tenant = f"t-{uuid.uuid4().hex[:8]}"
+    await add_document(app.state.sessions, tenant, "Procurement Policy", PROCUREMENT)
+    headers = {"Authorization": f"Bearer {make_token(sub='demo', tenant=tenant)}"}
+    response = await client.post(
+        f"/api/chats/{await new_chat(client, headers)}/messages",
+        json={"content": "Who approves contracts above 500,000 AED?"},
+        headers=headers,
+    )
+    events = parse_sse(response.text)
+    text = "".join(data["text"] for _, name, data in events if name == "token")
+    assert text.startswith("From the documents: Approval thresholds Contracts above 500,000 AED")
+    assert text.endswith("[1]")
+    assert [data["n"] for _, name, data in events if name == "citation"] == [1]

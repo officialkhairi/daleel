@@ -95,9 +95,16 @@ test-web:
 smoke: .env ## Log in as each seeded user against the running stack and call /api/me
 	./scripts/smoke.sh
 
+# The e2e run switches the stack to the fake LLM and embeddings (deterministic, no model).
+# Run `make up` afterwards to go back to the settings in .env.
+E2E_ENV := LLM_PROVIDER=fake LLM_MODEL=fake-echo LLM_FAKE_DELAY_MS=150 EMBEDDINGS_PROVIDER=fake
+
 .PHONY: e2e
-e2e: ## Playwright end-to-end tests
-	@echo "e2e: not yet (Playwright arrives in Phase 3)"
+e2e: .env ## Playwright end-to-end tests against the compose stack (fake LLM)
+	$(E2E_ENV) $(COMPOSE) up -d --build --wait web worker mailpit redis
+	$(PNPM) --filter @daleel/e2e exec playwright install chromium
+	$(PNPM) --filter @daleel/e2e run test:e2e
+	@echo "Stack is in e2e mode (fake LLM). Run 'make up' to restore your .env settings."
 
 .PHONY: evals
 evals: ## Golden-set evals

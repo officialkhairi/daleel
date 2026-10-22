@@ -58,5 +58,68 @@
     "reconnecting": "انقطع الاتصال. جارٍ إعادة الاتصال…",
     "answerFailed": "لم تكتمل الإجابة: {{message}}",
     "loadFailed": "تعذّر تحميل هذه المحادثة: {{message}}"
+  },
+  "nav": {
+    "label": "الرئيسية",
+    "chat": "المحادثة",
+    "documents": "المستندات"
+  },
+  "documents": {
+    "heading": "المستندات",
+    "lead": "تُستمد الإجابات في المحادثة من هذه المستندات، مع الإشارة إلى المقطع.",
+    "uploadHeading": "إضافة مستند",
+    "dropHint": "أفلت ملفًا هنا أو اختر ملفًا",
+    "fileTypes": "PDF أو Word ‏(.docx)، حتى 25 ميغابايت",
+    "titleLabel": "العنوان (اختياري)",
+    "titlePlaceholder": "اسم الملف افتراضيًا",
+    "accessLabel": "من يمكنه رؤيته",
+    "adminAlways": "يملك المسؤولون الوصول دائمًا.",
+    "upload": "رفع",
+    "uploading": "جارٍ الرفع…",
+    "empty": "لا توجد مستندات بعد.",
+    "loadFailed": "تعذّر تحميل المستندات: {{message}}",
+    "everyone": "الجميع",
+    "pages_zero": "{{count}} صفحة",
+    "pages_one": "صفحة واحدة",
+    "pages_two": "صفحتان",
+    "pages_few": "{{count}} صفحات",
+    "pages_many": "{{count}} صفحة",
+    "pages_other": "{{count}} صفحة",
+    "delete": "حذف",
+    "cancel": "إلغاء",
+    "deleteTitle": "حذف «{{title}}»؟",
+    "deleteBody": "لن تظهر مقاطعه في الإجابات بعد الآن. لا يمكن التراجع عن ذلك.",
+    "columns": {
+      "title": "العنوان",
+      "status": "الحالة",
+      "details": "التفاصيل",
+      "access": "الوصول",
+      "actions": "الإجراءات"
+    },
+    "status": {
+      "ready": "جاهز",
+      "failed": "فشل",
+      "queued": "في الانتظار",
+      "processing": "قيد المعالجة"
+    }
+  },
+  "citations": {
+    "open": "المصدر {{n}}: {{where}}",
+    "titlePage": "{{title}}، صفحة {{page}}",
+    "close": "إغلاق",
+    "pageOf": "صفحة {{page}} من {{count}}",
+    "spans": "المقطع في الصفحات {{pages}}",
+    "pages": "الصفحات",
+    "previous": "الصفحة السابقة",
+    "next": "الصفحة التالية",
+    "backToPassage": "العودة إلى المقطع",
+    "loadingPdf": "جارٍ تحميل المستند…",
+    "pdfFailed": "تعذّر عرض ملف PDF هذا.",
+    "fileFailed": "تعذّر فتح المستند: {{message}}"
+  },
+  "errors": {
+    "crashTitle": "حدث خطأ في هذه الصفحة",
+    "crashBody": "محادثاتك ومستنداتك محفوظة. أعد التحميل للمتابعة.",
+    "reload": "إعادة التحميل"
   }
 }

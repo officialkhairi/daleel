@@ -33,16 +33,18 @@ interface RequestOptions {
 /** Sends a request with the caller's access token. Non-2xx responses throw ApiError. */
 export async function apiRequest(path: string, token: string, options: RequestOptions = {}): Promise<Response> {
   const { method = "GET", body, headers = {}, signal, fetchImpl = fetch } = options;
+  // FormData (uploads) sets its own multipart Content-Type; anything else is sent as JSON.
+  const isForm = body instanceof FormData;
   const init: RequestInit = {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(body === undefined || isForm ? {} : { "Content-Type": "application/json" }),
       ...headers,
     },
   };
-  if (body !== undefined) init.body = JSON.stringify(body);
+  if (body !== undefined) init.body = isForm ? body : JSON.stringify(body);
   if (signal) init.signal = signal;
 
   const response = await fetchImpl(path, init);

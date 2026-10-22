@@ -23,3 +23,7 @@ htmlcov/
 .idea/
 .vscode/
 .claude/settings.local.json
+
+# playwright
+test-results/
+playwright-report/

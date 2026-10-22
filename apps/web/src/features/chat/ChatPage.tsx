@@ -1,9 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiPost } from "../../lib/api";
 import { useAccessToken } from "../auth/AuthProvider";
+import { CitationPanel } from "../citations/CitationPanel";
+import type { Citation } from "../citations/types";
 import { chatKeys, useChat, useChats, type ChatSummary } from "./api";
 import { ChatView } from "./ChatView";
 import { useChatRun } from "./useChatRun";
@@ -54,6 +56,12 @@ export function ChatPage() {
   const [chatId, select] = useSelectedChat();
   const chat = useChat(chatId);
   const { state, send, retry, follow, stop } = useChatRun(chatId);
+  // Remembered per chat, so switching chats closes the panel without an effect.
+  const [opened, setOpened] = useState<{ chatId: string | null; citation: Citation } | null>(null);
+  const openCitation = opened?.chatId === chatId ? opened.citation : null;
+  const setOpenCitation = (citation: Citation | null) => {
+    setOpened(citation ? { chatId, citation } : null);
+  };
 
   // Reopening a chat whose answer is still generating picks the stream back up.
   const followed = useRef<string | null>(null);
@@ -93,9 +101,19 @@ export function ChatPage() {
             onRetry={() => {
               if (chatId) void retry(chatId);
             }}
+            onCite={setOpenCitation}
           />
         )}
       </main>
+      {openCitation && (
+        <CitationPanel
+          key={`${String(openCitation.n)}-${openCitation.chunk_id}`}
+          citation={openCitation}
+          onClose={() => {
+            setOpenCitation(null);
+          }}
+        />
+      )}
     </div>
   );
 }
