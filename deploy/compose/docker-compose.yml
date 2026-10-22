@@ -1,5 +1,18 @@
 name: daleel
 
+# Shared by the api (uploads, query embeddings) and the worker (ingestion).
+x-storage-env: &storage-env
+  S3_ENDPOINT: minio:9000
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  S3_BUCKET: ${S3_BUCKET}
+
+x-embeddings-env: &embeddings-env
+  EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER}
+  EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL}
+  EMBEDDINGS_BASE_URL: ${EMBEDDINGS_BASE_URL}
+  EMBEDDINGS_API_KEY: ${EMBEDDINGS_API_KEY}
+
 x-healthcheck: &healthcheck
   interval: 5s
   timeout: 5s
@@ -124,6 +137,7 @@ services:
       LLM_PRICE_IN_PER_MTOK: ${LLM_PRICE_IN_PER_MTOK}
       LLM_PRICE_OUT_PER_MTOK: ${LLM_PRICE_OUT_PER_MTOK}
       LLM_FAKE_DELAY_MS: ${LLM_FAKE_DELAY_MS}
+      <<: [*storage-env, *embeddings-env]
       LOG_LEVEL: ${LOG_LEVEL}
     # Lets LLM_BASE_URL point at a model server on the host (e.g. Ollama on macOS).
     extra_hosts:
@@ -139,6 +153,38 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+      args:
+        LOCAL_EMBEDDINGS: ${WORKER_LOCAL_EMBEDDINGS}
+    image: daleel-worker:dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      <<: [*storage-env, *embeddings-env]
+      # Read by the shared Settings class; the worker doesn't authenticate users.
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_JWKS_URL: unused-by-worker
+      LOG_LEVEL: ${LOG_LEVEL}
+    volumes:
+      - model-cache:/models  # Hugging Face cache: bge-m3 downloads once
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      # The first start may download the embedding model (~2.3 GB).
+      start_period: 900s
+      test: ["CMD", "arq", "--check", "daleel_worker.main.WorkerSettings"]
 
   web:
     build:
@@ -171,12 +217,16 @@ services:
   ollama:
     image: ollama/ollama:0.12.6
     profiles: ["local-llm"]
+    environment:
+      # Grounded prompts (6 sources) need more than Ollama's default context.
+      OLLAMA_CONTEXT_LENGTH: "8192"
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
       - ollama-data:/root/.ollama
 
 volumes:
+  model-cache:
   ollama-data:
   postgres-data:
   redis-data:

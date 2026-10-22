@@ -29,6 +29,20 @@ class UsageEvent(StreamEvent):
     cost_usd: float
 
 
+class Citation(StreamEvent):
+    """Sent the first time an answer cites source [n]."""
+
+    name: ClassVar[str] = "citation"
+    n: int
+    chunk_id: uuid.UUID
+    doc_id: uuid.UUID
+    title: str
+    page: int | None
+    bbox: dict[str, float | int] | None  # first box, for a quick jump
+    bboxes: list[dict[str, float | int]]  # every box of the passage, for the highlight
+    snippet: str
+
+
 class ErrorEvent(StreamEvent):
     name: ClassVar[str] = "error"
     code: str
