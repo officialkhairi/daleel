@@ -44,6 +44,16 @@ class Forbidden(AppError):
     code = "forbidden"
 
 
+class NotFound(AppError):
+    status_code = HTTPStatus.NOT_FOUND
+    code = "not_found"
+
+
+class Gone(AppError):
+    status_code = HTTPStatus.GONE
+    code = "gone"
+
+
 class ServiceUnavailable(AppError):
     status_code = HTTPStatus.SERVICE_UNAVAILABLE
     code = "service_unavailable"

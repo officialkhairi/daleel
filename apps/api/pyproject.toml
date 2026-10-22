@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pydantic-settings>=2.16.1",
     "pyjwt[crypto]>=2.15.1",
+    "redis>=8.1.0",
     "sqlalchemy[asyncio]>=2.1.6",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -20,7 +21,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.2",
-    "testcontainers[postgres]>=4.15.0",
+    "testcontainers[postgres,redis]>=4.15.0",
 ]
 
 [tool.ruff]
@@ -57,4 +58,6 @@ addopts = "-q"
 
 [tool.coverage.run]
 source = ["app"]
+# SQLAlchemy's async layer runs on greenlets; without this, lines after a DB call go unseen.
+concurrency = ["greenlet", "thread"]
 omit = ["app/db/migrations/*"]
