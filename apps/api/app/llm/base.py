@@ -64,3 +64,13 @@ class LLMProvider(Protocol):
         tools: Sequence[ToolSpec],
         **opts: Any,
     ) -> AsyncIterator[LLMEvent]: ...
+
+
+class LLMError(Exception):
+    """A provider failure, already classified for the client's ErrorEnvelope."""
+
+    def __init__(self, message: str, *, code: str = "llm_error", retryable: bool = False) -> None:
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.retryable = retryable

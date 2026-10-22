@@ -114,7 +114,20 @@ services:
       OIDC_JWKS_URL: http://keycloak:8080/realms/daleel/protocol/openid-connect/certs
       OIDC_AUDIENCE: ${OIDC_AUDIENCE}
       JWKS_CACHE_TTL_SECONDS: ${JWKS_CACHE_TTL_SECONDS}
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
+      LLM_STREAM_USAGE: ${LLM_STREAM_USAGE}
+      LLM_PRICE_IN_PER_MTOK: ${LLM_PRICE_IN_PER_MTOK}
+      LLM_PRICE_OUT_PER_MTOK: ${LLM_PRICE_OUT_PER_MTOK}
+      LLM_FAKE_DELAY_MS: ${LLM_FAKE_DELAY_MS}
       LOG_LEVEL: ${LOG_LEVEL}
+    # Lets LLM_BASE_URL point at a model server on the host (e.g. Ollama on macOS).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -123,6 +136,8 @@ services:
       minio-init:
         condition: service_completed_successfully
       keycloak:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   web:
@@ -151,7 +166,18 @@ services:
       <<: *healthcheck
       test: ["CMD", "/mailpit", "readyz"]
 
+  # `docker compose --profile local-llm up -d ollama` then
+  # `docker compose exec ollama ollama pull falcon3:3b`
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["local-llm"]
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
 volumes:
+  ollama-data:
   postgres-data:
   redis-data:
   minio-data:

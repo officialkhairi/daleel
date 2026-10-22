@@ -15,8 +15,10 @@ from alembic.config import Config
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 
 from app.config import Settings
+from app.llm.fake import FakeProvider
 from app.main import create_app
 
 ISSUER = "http://keycloak.test/realms/daleel"
@@ -98,9 +100,17 @@ def database_urls(postgres: PostgresContainer) -> tuple[str, str]:
 
 
 @pytest.fixture(scope="session")
-def settings(database_urls: tuple[str, str]) -> Settings:
+def redis_url() -> Iterator[str]:
+    with RedisContainer("redis:7.4-alpine") as container:
+        host = container.get_container_host_ip()
+        yield f"redis://{host}:{container.get_exposed_port(6379)}/0"
+
+
+@pytest.fixture(scope="session")
+def settings(database_urls: tuple[str, str], redis_url: str) -> Settings:
     return Settings(
         database_url=database_urls[1],
+        redis_url=redis_url,
         oidc_issuer=ISSUER,
         oidc_jwks_url=JWKS_URL,
         oidc_audience=AUDIENCE,
@@ -127,9 +137,17 @@ def jwks_transport(
 
 
 @pytest.fixture
-async def app(settings: Settings, jwks_transport: httpx.MockTransport) -> AsyncIterator[FastAPI]:
+def provider() -> FakeProvider:
+    """Echoes by default. Tests script turns with `provider._turns` or swap app.state.provider."""
+    return FakeProvider()
+
+
+@pytest.fixture
+async def app(
+    settings: Settings, jwks_transport: httpx.MockTransport, provider: FakeProvider
+) -> AsyncIterator[FastAPI]:
     async with httpx.AsyncClient(transport=jwks_transport) as http:
-        application = create_app(settings, http_client=http)
+        application = create_app(settings, http_client=http, provider=provider)
         async with application.router.lifespan_context(application):
             yield application
 
