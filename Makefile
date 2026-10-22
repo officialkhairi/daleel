@@ -51,7 +51,7 @@ migrate: .env ## Apply database migrations (host)
 
 .PHONY: dev-api
 dev-api: .env migrate ## Run the API on the host with reload
-	$(API) uv run uvicorn app.main:app --reload --port 8000
+	$(API) uv run uvicorn app.main:create_app --factory --reload --port 8000
 
 .PHONY: dev-web
 dev-web: ## Run the SPA on the host with Vite

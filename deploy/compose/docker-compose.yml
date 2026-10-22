@@ -91,6 +91,38 @@ services:
         - -c
         - "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"
 
+  # One-shot: applies migrations as the owner role, so the API never holds owner credentials.
+  migrate:
+    build: ../../apps/api
+    image: daleel-api:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      APP_DB_USER: ${APP_DB_USER}
+      OIDC_ISSUER: unused-by-migrations
+      OIDC_JWKS_URL: unused-by-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: daleel-api:dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_JWKS_URL: http://keycloak:8080/realms/daleel/protocol/openid-connect/certs
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE}
+      JWKS_CACHE_TTL_SECONDS: ${JWKS_CACHE_TTL_SECONDS}
+      LOG_LEVEL: ${LOG_LEVEL}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+
   mailpit:
     image: axllent/mailpit:v1.27.0
     ports:
