@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
+from app.chat.language import strip_reply_note
 from app.llm.base import (
     ChatMessage,
     Finish,
@@ -40,6 +41,7 @@ _TURNS = TypeAdapter(list[list[ScriptEvent]])
 def echo_turn(messages: Sequence[ChatMessage]) -> list[ScriptEvent]:
     """'You said: …' streamed word by word, with whitespace-count token usage."""
     last = next((m.content for m in reversed(messages) if m.role == "user"), "")
+    last = strip_reply_note(last)  # echo the question as the user typed it
     words = f"You said: {last}".split(" ")
     events: list[ScriptEvent] = [
         TextDelta(text=w if i == len(words) - 1 else f"{w} ") for i, w in enumerate(words)

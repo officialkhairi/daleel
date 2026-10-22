@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.principal import Principal
 from app.chat import repo
-from app.chat.runner import SYSTEM_PROMPT, RunSpec
+from app.chat.language import Language, detect_language, reply_note, system_prompt
+from app.chat.runner import RunSpec
 from app.db.models import Chat, Message, Run
 from app.db.session import tenant_session
 from app.errors import AppError, NotFound
@@ -34,13 +35,23 @@ class StartedRun:
     user_message_id: uuid.UUID
 
 
-def _history(messages: list[Message]) -> list[ChatMessage]:
+def _history(messages: list[Message], language: Language) -> list[ChatMessage]:
     turns = [
         ChatMessage(role="user" if m.role == "user" else "assistant", content=m.content)
         for m in messages
         if m.role in ("user", "assistant") and m.content
     ]
-    return [ChatMessage(role="system", content=SYSTEM_PROMPT), *turns]
+    if turns and turns[-1].role == "user":
+        question = turns[-1]
+        turns[-1] = question.model_copy(
+            update={"content": f"{question.content}\n\n{reply_note(language)}"}
+        )
+    return [ChatMessage(role="system", content=system_prompt(language)), *turns]
+
+
+def _reply_language(question: str, principal: Principal) -> Language:
+    """The language of the question being answered, not of the UI or earlier turns."""
+    return detect_language(question, fallback="ar" if principal.locale == "ar" else "en")
 
 
 async def _locked_chat(session: AsyncSession, chat_id: uuid.UUID, user_id: uuid.UUID) -> Chat:
@@ -98,6 +109,6 @@ async def start_run(
         chat_id=chat.id,
         tenant_id=principal.tenant_id,
         model=model,
-        history=_history(list(history)),
+        history=_history(list(history), _reply_language(user_message.content, principal)),
     )
     return StartedRun(spec=spec, user_message_id=user_message.id)
