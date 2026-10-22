@@ -1,6 +1,10 @@
 {
-  "app": { "name": "Daleel" },
-  "status": { "loading": "Loading…" },
+  "app": {
+    "name": "Daleel"
+  },
+  "status": {
+    "loading": "Loading…"
+  },
   "signIn": {
     "lead": "Ask your organisation's documents questions in Arabic or English. Every answer shows the passage it came from.",
     "button": "Sign in",
@@ -9,7 +13,8 @@
   "header": {
     "signOut": "Sign out",
     "switchLanguage": "Switch language",
-    "otherLanguage": "العربية"
+    "otherLanguage": "العربية",
+    "profile": "Profile"
   },
   "profile": {
     "email": "Email",
@@ -18,8 +23,40 @@
     "roles": "Roles",
     "noRoles": "No roles assigned. Ask an administrator for access.",
     "loadFailed": "Couldn't load your profile: {{message}}",
-    "retry": "Try again"
+    "retry": "Try again",
+    "title": "Your profile",
+    "description": "Your account details and roles.",
+    "close": "Close"
   },
-  "languages": { "en": "English", "ar": "Arabic" },
-  "roles": { "viewer": "Viewer", "editor": "Editor", "approver": "Approver", "admin": "Admin" }
+  "languages": {
+    "en": "English",
+    "ar": "Arabic"
+  },
+  "roles": {
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "approver": "Approver",
+    "admin": "Admin"
+  },
+  "chat": {
+    "history": "Chats",
+    "newChat": "New chat",
+    "untitled": "New chat",
+    "noChats": "No chats yet.",
+    "transcript": "Conversation",
+    "emptyTitle": "Ask a question",
+    "emptyBody": "Write in Arabic or English. The answer appears as it's written.",
+    "inputLabel": "Message",
+    "placeholder": "Ask a question…",
+    "sendHint": "Enter to send, Shift+Enter for a new line",
+    "send": "Send",
+    "stop": "Stop",
+    "retry": "Try again",
+    "stopped": "Stopped",
+    "you": "You",
+    "assistant": "Daleel",
+    "reconnecting": "Connection lost. Reconnecting…",
+    "answerFailed": "The answer didn't finish: {{message}}",
+    "loadFailed": "Couldn't load this chat: {{message}}"
+  }
 }
