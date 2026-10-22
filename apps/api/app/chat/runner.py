@@ -22,12 +22,6 @@ log = logging.getLogger(__name__)
 
 CANCEL_POLL_SECONDS = 0.2
 
-SYSTEM_PROMPT = (
-    "You are Daleel, an assistant for enterprise documents. "
-    "Reply in the language of the user's latest message (Arabic or English). "
-    "Use Markdown for lists, tables and emphasis. If you are not sure, say so plainly."
-)
-
 
 @dataclass(frozen=True)
 class RunSpec:

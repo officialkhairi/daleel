@@ -128,7 +128,7 @@ async def test_model_sees_system_prompt_and_history(
     assert [(m.role, m.content) for m in prompt[1:]] == [
         ("user", "first"),
         ("assistant", "You said: first"),
-        ("user", "second"),
+        ("user", "second\n\n(Reply in English.)"),
     ]
 
 
@@ -179,7 +179,7 @@ async def test_retry_regenerates_last_answer(
         ("assistant", "second try"),
     ]
     # The retry prompt ends at the question; the discarded answer is not in it.
-    assert [m.content for m in provider.calls[1][1:]] == ["question"]
+    assert [m.content for m in provider.calls[1][1:]] == ["question\n\n(Reply in English.)"]
 
 
 async def test_retry_without_question_is_409(
@@ -379,3 +379,27 @@ async def test_empty_answer_is_a_retryable_error(
     assert events[-1][2] == {"message_id": None, "finish_reason": "error"}
     detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
     assert [m["role"] for m in detail["messages"]] == ["user"]
+
+
+async def test_reply_language_follows_the_question_not_the_history(
+    client: httpx.AsyncClient, headers: dict[str, str], provider: FakeProvider
+) -> None:
+    chat_id = await new_chat(client, headers)
+    await send(client, headers, chat_id, "مرحبا")
+    await send(client, headers, chat_id, "hello")
+
+    assert "أجب باللغة العربية" in provider.calls[0][0].content
+    assert "Reply in English." in provider.calls[1][0].content
+    # The latest question carries the note in the prompt; earlier turns and the stored text don't.
+    assert provider.calls[1][-1].content == "hello\n\n(Reply in English.)"
+    assert provider.calls[1][1].content == "مرحبا"
+    detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
+    assert [m["content"] for m in detail["messages"] if m["role"] == "user"] == ["مرحبا", "hello"]
+
+
+async def test_reply_language_falls_back_to_user_locale(
+    client: httpx.AsyncClient, make_token: TokenFactory, provider: FakeProvider
+) -> None:
+    arabic_user = {"Authorization": f"Bearer {make_token(sub=f'ar-{uuid.uuid4()}', locale='ar')}"}
+    await send(client, arabic_user, await new_chat(client, arabic_user), "?")
+    assert "أجب باللغة العربية" in provider.calls[0][0].content
