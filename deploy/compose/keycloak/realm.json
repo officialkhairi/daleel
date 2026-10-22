@@ -1,0 +1,143 @@
+{
+  "realm": "daleel",
+  "displayName": "Daleel",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "ar"],
+  "defaultLocale": "en",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "roles": {
+    "realm": [
+      { "name": "viewer", "description": "Read documents and chat" },
+      { "name": "editor", "description": "Upload and manage documents" },
+      { "name": "approver", "description": "Approve agent side-effect actions" },
+      { "name": "admin", "description": "Administer the tenant" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "daleel-web",
+      "name": "Daleel web app",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:5173",
+      "baseUrl": "/",
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "daleel-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "daleel-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant",
+            "claim.value": "acme",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "daleel-smoke",
+      "name": "Dev-only smoke test client (password grant)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${SMOKE_CLIENT_SECRET}",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "daleel-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "daleel-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "tenant",
+            "claim.value": "acme",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "officer",
+      "enabled": true,
+      "email": "officer@daleel.local",
+      "emailVerified": true,
+      "firstName": "Compliance",
+      "lastName": "Officer",
+      "attributes": { "locale": ["en"] },
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }],
+      "realmRoles": ["editor", "approver"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "email": "viewer@daleel.local",
+      "emailVerified": true,
+      "firstName": "Read-only",
+      "lastName": "Viewer",
+      "attributes": { "locale": ["ar"] },
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }],
+      "realmRoles": ["viewer"]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@daleel.local",
+      "emailVerified": true,
+      "firstName": "Tenant",
+      "lastName": "Admin",
+      "attributes": { "locale": ["en"] },
+      "credentials": [{ "type": "password", "value": "demo", "temporary": false }],
+      "realmRoles": ["admin"]
+    }
+  ]
+}
