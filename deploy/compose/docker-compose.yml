@@ -75,11 +75,11 @@ services:
       KC_HEALTH_ENABLED: "true"
       # Tokens are always issued for http://localhost:8080 (what the browser sees),
       # while the API container fetches JWKS over the internal network.
-      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       SMOKE_CLIENT_SECRET: ${SMOKE_CLIENT_SECRET}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${KEYCLOAK_PORT}:8080"
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     healthcheck:
