@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "@daleel/ui/tokens.css";
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Arabic text gets the Arabic face first so mixed-script runs pick the right glyphs. */
+  :lang(ar) {
+    font-family: "IBM Plex Sans Arabic", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}

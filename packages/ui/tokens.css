@@ -1,0 +1,31 @@
+/* Daleel design tokens (Tailwind v4 theme). Components + Storybook arrive in Phase 5.
+   Light is the default; dark follows the OS. Only semantic names are used in apps. */
+@theme {
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f4f7f6;
+  --color-surface: #ffffff;
+  --color-ink: #0f2a30;
+  --color-muted: #52666b;
+  --color-line: #d5dfdd;
+  --color-brand: #0e5560;
+  --color-brand-ink: #ffffff;
+  --color-brand-soft: #e1eeee;
+  --color-focus: #c8941b;
+  --color-danger: #a8322a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: #0d1a1d;
+    --color-surface: #13252a;
+    --color-ink: #e4eeed;
+    --color-muted: #9db1b3;
+    --color-line: #24393e;
+    --color-brand: #5fb8bf;
+    --color-brand-ink: #062226;
+    --color-brand-soft: #173a40;
+    --color-focus: #e2b043;
+    --color-danger: #f08a7f;
+  }
+}
