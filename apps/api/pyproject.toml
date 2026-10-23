@@ -73,6 +73,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# A test stuck this long dumps every thread's stack, so a hang in CI shows where it is.
+faulthandler_timeout = 120
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 addopts = "-q"
