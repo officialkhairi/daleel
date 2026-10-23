@@ -5,11 +5,20 @@ import re
 from dataclasses import dataclass, field
 
 # "[1]", "[1, 3]", "[1،3]" (Arabic comma); sources are numbered from 1, so "[0]" (as in code)
-# is not a marker. Anything else in brackets is ordinary text.
+# is not a marker. Small models sometimes echo the prompt's tag instead ("[source n="1"]",
+# "[Source 2]"); those are markers too and are rewritten to the plain form. Anything else in
+# brackets is ordinary text.
 _N = r"[1-9]\d?"
-_MARKER = re.compile(rf"\[\s*({_N}(?:\s*[,،]\s*{_N})*)\s*\]")
+_Q = "[\"']?"
+_MARKER = re.compile(
+    rf"\[\s*(?:source\s*(?:n\s*=\s*)?{_Q})?({_N}(?:\s*[,،]\s*{_N})*){_Q}\s*\]", re.IGNORECASE
+)
 # A prefix that could still grow into a marker.
-_PARTIAL = re.compile(rf"\[\s*({_N}(\s*[,،]\s*({_N})?)*)?\s*$")
+_PARTIAL = re.compile(
+    rf"\[\s*(?:(?:s|so|sou|sour|sourc)$|source\s*(?:n\s*(?:=\s*{_Q})?)?)?"
+    rf"({_N}(\s*[,،]\s*({_N})?)*{_Q})?\s*$",
+    re.IGNORECASE,
+)
 _MAX_HELD = 24
 
 

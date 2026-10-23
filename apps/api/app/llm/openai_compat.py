@@ -2,6 +2,7 @@
 OpenAI). The SSE stream is parsed by hand: `data: {chunk}` lines, terminated by `data: [DONE]`."""
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from app.llm.base import (
     ToolSpec,
     Usage,
 )
+
+log = logging.getLogger(__name__)
 
 _FINISH_REASONS: dict[str, Any] = {
     "stop": "stop",
@@ -154,25 +157,38 @@ class OpenAICompatProvider:
                 body[key] = opts[key]
         headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
+        no_native_tools = False
         try:
             async with self._http.stream(
                 "POST", self._url, json=body, headers=headers, timeout=self._timeout
             ) as response:
                 if response.status_code != httpx.codes.OK:
                     status = response.status_code
-                    raise LLMError(
-                        f"Model server returned HTTP {status}.",
-                        code="llm_rate_limited" if status == 429 else "llm_unavailable",
-                        retryable=status in (408, 409, 429) or status >= 500,
-                    )
-                async for event in parse_stream(response.aiter_lines()):
-                    yield event
+                    detail = (await response.aread()).decode(errors="replace").lower()
+                    no_native_tools = status == 400 and bool(tools) and "tool" in detail
+                    if not no_native_tools:
+                        raise LLMError(
+                            f"Model server returned HTTP {status}.",
+                            code="llm_rate_limited" if status == 429 else "llm_unavailable",
+                            retryable=status in (408, 409, 429) or status >= 500,
+                        )
+                else:
+                    async for event in parse_stream(response.aiter_lines()):
+                        yield event
         except httpx.TimeoutException as exc:
             raise LLMError("Model server timed out.", code="llm_timeout", retryable=True) from exc
         except httpx.HTTPError as exc:
             raise LLMError(
                 "Model server is unreachable.", code="llm_unavailable", retryable=True
             ) from exc
+
+        if no_native_tools:
+            # The model can't call tools natively (Ollama: "does not support tools"). Use
+            # schema-constrained JSON decisions from now on, starting with this turn.
+            log.warning("%s has no native tool calling; switching to JSON mode", body["model"])
+            self._tool_mode = "json"
+            async for event in self._json_decision(messages, tools, **opts):
+                yield event
 
     # --- models without native tool calling ------------------------------------------------
 

@@ -365,3 +365,30 @@ async def test_json_mode_flattens_tool_turns() -> None:
         == 'Drafted.\n[{"action": "send_email", "arguments": {"to": ["a@b.c"]}}]'
     )
     assert body["messages"][3]["content"] == "Tool result (c1):\nThe email was sent."
+
+
+async def test_falls_back_to_json_mode_when_the_model_has_no_tools() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if body["stream"]:
+            return httpx.Response(
+                400, json={"error": {"message": "falcon3:1b does not support tools"}}
+            )
+        content = '{"action": "answer", "answer": "Done."}'
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    tool = ToolSpec(name="send_email", description="Send", parameters={"type": "object"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        provider = OpenAICompatProvider(
+            base_url=BASE, model="falcon3:1b", api_key="", http=http, timeout=5
+        )
+        first = [e async for e in provider.stream(USER, [tool])]
+        second = [e async for e in provider.stream(USER, [tool])]
+
+    assert [e for e in first if isinstance(e, TextDelta)] == [TextDelta(text="Done.")]
+    assert second == first
+    # One native attempt, then JSON mode for this turn and every later one.
+    assert [b["stream"] for b in seen] == [True, False, False]

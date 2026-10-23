@@ -13,7 +13,7 @@ from app.agent.effects import EffectError, Mailer, Ticketing
 from app.agent.expiry import expire_stale_approvals
 from app.agent.factory import agent_deps
 from app.agent.loop import RunSpec, _execute_once, _Segment, resume_run
-from app.agent.tools import SourcePool
+from app.agent.tools import TOOLS, SourcePool
 from app.api.ws import visible
 from app.auth.principal import tenant_id_for
 from app.db.models import Approval, AuditEntry, Run
@@ -557,3 +557,16 @@ async def test_flag_clause_after_editor_request_and_approval(
     async with tenant_session(app.state.sessions, tenant_id_for(tenant)) as session:
         reasons = (await session.scalars(text("SELECT reason FROM clause_flags"))).all()
     assert reasons == ["Outdated threshold"]
+
+
+@pytest.mark.parametrize(
+    ("to", "want"),
+    [
+        ("a@acme.example", ["a@acme.example"]),
+        ("a@acme.example, b@acme.example", ["a@acme.example", "b@acme.example"]),
+        (["a@acme.example"], ["a@acme.example"]),
+    ],
+)
+def test_send_email_accepts_recipients_as_a_string(to: Any, want: list[str]) -> None:
+    args = TOOLS["send_email"].parse({"to": to, "subject": "s", "body": "b"})
+    assert args.model_dump()["to"] == want
