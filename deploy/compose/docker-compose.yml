@@ -147,6 +147,7 @@ services:
       TICKETING_URL: http://mock-ticketing:8090
       TICKETING_TOKEN: ${TICKETING_TOKEN}
       <<: [*storage-env, *embeddings-env]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       LOG_LEVEL: ${LOG_LEVEL}
     # Lets LLM_BASE_URL point at a model server on the host (e.g. Ollama on macOS).
     extra_hosts:
@@ -181,6 +182,8 @@ services:
       # Read by the shared Settings class; the worker doesn't authenticate users.
       OIDC_ISSUER: ${OIDC_ISSUER}
       OIDC_JWKS_URL: unused-by-worker
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_SERVICE_NAME: daleel-worker
       LOG_LEVEL: ${LOG_LEVEL}
     volumes:
       - model-cache:/models  # Hugging Face cache: bge-m3 downloads once
@@ -222,6 +225,7 @@ services:
       args:
         VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY}
         VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID}
+        VITE_OTEL: ${VITE_OTEL}
     image: daleel-web:dev
     ports:
       - "127.0.0.1:5173:8080"
@@ -242,7 +246,7 @@ services:
       test: ["CMD", "/mailpit", "readyz"]
 
   # `docker compose --profile local-llm up -d ollama` then
-  # `docker compose exec ollama ollama pull falcon3:3b`
+  # `docker compose exec ollama ollama pull qwen2.5:3b`
   ollama:
     image: ollama/ollama:0.12.6
     profiles: ["local-llm"]
@@ -254,7 +258,154 @@ services:
     volumes:
       - ollama-data:/root/.ollama
 
+  # --- observability (`make obs`) -------------------------------------------------------
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.137.0
+    profiles: ["obs"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+    volumes:
+      - ./obs/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on: [tempo]
+
+  tempo:
+    image: grafana/tempo:2.8.2
+    profiles: ["obs"]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./obs/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    profiles: ["obs"]
+    volumes:
+      - ./obs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT}:9090"
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: ["obs"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./obs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./obs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT}:3000"
+    depends_on: [prometheus, tempo]
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health"]
+
+  # Langfuse (LLM traces): web + worker, with ClickHouse and its own Postgres; events go to MinIO.
+  langfuse-db:
+    image: postgres:16-alpine
+    profiles: ["obs"]
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-db:/var/lib/postgresql/data
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3
+    profiles: ["obs"]
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping"]
+
+  langfuse-bucket:
+    image: cgr.dev/chainguard/minio-client@sha256:72f9978d415ea8294d78051fb3aee2fd258d449237633f77f100b5367bb5225d
+    profiles: ["obs"]
+    command: ["mb", "--ignore-existing", "local/langfuse"]
+    environment:
+      MC_HOST_local: http://${MINIO_ROOT_USER}:${MINIO_ROOT_PASSWORD}@minio:9000
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  langfuse-worker: &langfuse
+    image: langfuse/langfuse-worker:4.68.0
+    profiles: ["obs"]
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/langfuse
+      SALT: ${LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
+      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT}
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_CONNECTION_STRING: redis://redis:6379/1
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      # Creates the org, project and API keys the collector uses, on first start.
+      LANGFUSE_INIT_ORG_ID: daleel
+      LANGFUSE_INIT_ORG_NAME: Daleel
+      LANGFUSE_INIT_PROJECT_ID: daleel
+      LANGFUSE_INIT_PROJECT_NAME: Daleel
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: admin@daleel.local
+      LANGFUSE_INIT_USER_NAME: Admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_ADMIN_PASSWORD}
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      langfuse-bucket:
+        condition: service_completed_successfully
+
+  langfuse-web:
+    <<: *langfuse
+    image: langfuse/langfuse:4.68.0
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT}:3000"
+    healthcheck:
+      <<: *healthcheck
+      start_period: 120s
+      # Next.js listens on the container's hostname address, not 127.0.0.1.
+      test: ["CMD-SHELL", "wget -qO- http://$$HOSTNAME:3000/api/public/health"]
+
 volumes:
+  tempo-data:
+  langfuse-db:
+  clickhouse-data:
   model-cache:
   ollama-data:
   postgres-data:

@@ -45,7 +45,9 @@ def instrument_app(app: FastAPI) -> None:
 
 
 def instrument_engine(engine: AsyncEngine) -> None:
-    SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)
+    # The instrumentor's declared range stops below SQLAlchemy 2.1, but the engine event hooks it
+    # uses are unchanged in 2.1; without skipping the check there would be no database spans.
+    SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine, skip_dep_check=True)
 
 
 def current_trace_id() -> str | None:
