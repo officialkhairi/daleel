@@ -152,3 +152,33 @@ jobs:
         with:
           name: playwright
           path: e2e/test-results/
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - name: helm lint
+        run: |
+          helm lint deploy/helm/daleel
+          helm lint deploy/helm/daleel -f deploy/helm/daleel/ci/kind-values.yaml
+      - uses: helm/kind-action@v1
+      - name: build images
+        run: |
+          docker build -t daleel.local/daleel-api:ci apps/api
+          docker build -t daleel.local/daleel-worker:ci -f apps/worker/Dockerfile --build-arg LOCAL_EMBEDDINGS=false .
+          docker build -t daleel.local/daleel-web:ci -f apps/web/Dockerfile .
+          for c in api worker web; do kind load docker-image "daleel.local/daleel-$c:ci" --name chart-testing; done
+      - name: install on kind
+        run: helm install daleel deploy/helm/daleel -f deploy/helm/daleel/ci/kind-values.yaml --wait --timeout 10m
+      - name: helm test
+        run: helm test daleel --logs
+      - name: cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -o wide
+          kubectl describe pods | tail -n 200
+          for d in api worker web; do kubectl logs deploy/daleel-$d --all-containers --tail 100 || true; done

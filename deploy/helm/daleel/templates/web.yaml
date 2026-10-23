@@ -1,0 +1,55 @@
+{{- $c := dict "ctx" $ "component" "web" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "daleel.fullname" . }}-web
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- if not .Values.web.autoscaling.enabled }}
+  replicas: {{ .Values.web.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" $c | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "daleel.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        # Static files only: the ingress sends /api straight to the API service.
+        - name: web
+          image: {{ include "daleel.image" $c }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          livenessProbe:
+            httpGet: { path: /, port: http }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "daleel.fullname" . }}-web
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "daleel.selector" $c | nindent 4 }}
+  ports:
+    - { name: http, port: 80, targetPort: http }

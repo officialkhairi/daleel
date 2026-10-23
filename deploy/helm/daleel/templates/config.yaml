@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "daleel.fullname" . }}-env
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+data:
+  {{- /* Empty values are left out so the application's defaults apply. */}}
+  {{- range $key, $value := (include "daleel.env" . | fromYaml) }}
+  {{- if $value }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}
+  {{- end }}
+{{- if not .Values.existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "daleel.secretName" . }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{- range $key, $value := (include "daleel.secretEnv" . | fromYaml) }}
+  {{- if $value }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "daleel.serviceAccountName" . }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}

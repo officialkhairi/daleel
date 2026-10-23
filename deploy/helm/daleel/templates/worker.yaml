@@ -1,0 +1,56 @@
+{{- $c := dict "ctx" $ "component" "worker" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "daleel.fullname" . }}-worker
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" $c | nindent 8 }}
+      annotations:
+        {{- include "daleel.configChecksum" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "daleel.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Ingestion jobs are short; give a running one time to finish on shutdown.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: worker
+          image: {{ include "daleel.image" $c }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom: {{- include "daleel.envFrom" . | nindent 12 }}
+          env:
+            - { name: OTEL_SERVICE_NAME, value: daleel-worker }
+            - { name: OIDC_JWKS_URL, value: unused-by-worker }
+          # arq writes a health key to Redis every 30 s; --check reads it back. The first
+          # start may download the embedding model, hence the long startup window.
+          startupProbe:
+            exec: { command: ["arq", "--check", "daleel_worker.main.WorkerSettings"] }
+            periodSeconds: 15
+            failureThreshold: 60
+          livenessProbe:
+            exec: { command: ["arq", "--check", "daleel_worker.main.WorkerSettings"] }
+            periodSeconds: 60
+            timeoutSeconds: 10
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: models, mountPath: /models }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        # Hugging Face cache for sentence_transformers; use a PVC to keep it across restarts.
+        - { name: models, emptyDir: {} }

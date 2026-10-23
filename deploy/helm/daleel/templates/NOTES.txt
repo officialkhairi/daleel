@@ -1,0 +1,15 @@
+Daleel {{ .Chart.AppVersion }} is installed.
+{{- if .Values.ingress.enabled }}
+
+Open: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- else }}
+
+  kubectl port-forward svc/{{ include "daleel.fullname" . }}-web 8080:80
+  kubectl port-forward svc/{{ include "daleel.fullname" . }}-api 8000:8000
+{{- end }}
+
+Check it: helm test {{ .Release.Name }}
+{{- if .Values.dev.enabled }}
+
+dev.enabled: Postgres, Redis and MinIO run inside the release without persistence. Demo use only.
+{{- end }}

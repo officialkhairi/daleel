@@ -1,0 +1,39 @@
+{{- range $name := list "api" "worker" "web" }}
+{{- $v := index $.Values $name }}
+{{- $c := dict "ctx" $ "component" $name }}
+{{- if $v.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "daleel.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "daleel.labels" $ | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "daleel.fullname" $ }}-{{ $name }}
+  minReplicas: {{ $v.autoscaling.minReplicas }}
+  maxReplicas: {{ $v.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: {{ $v.autoscaling.targetCPUUtilizationPercentage }} }
+{{- end }}
+{{- if $v.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "daleel.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "daleel.labels" $ | nindent 4 }}
+spec:
+  minAvailable: {{ $v.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" $c | nindent 6 }}
+{{- end }}
+{{- end }}

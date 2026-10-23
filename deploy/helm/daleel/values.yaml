@@ -1,0 +1,114 @@
+# Images are published by .github/workflows/release.yml. The web image bakes in the OIDC
+# settings at build time (VITE_OIDC_AUTHORITY, VITE_OIDC_CLIENT_ID), so build it per environment.
+image:
+  registry: ghcr.io/officialkhairi
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Plain settings, passed to the API and worker as environment variables (see .env.example).
+env:
+  OIDC_ISSUER: ""        # e.g. https://sso.example.com/realms/daleel
+  OIDC_JWKS_URL: ""      # e.g. https://sso.example.com/realms/daleel/protocol/openid-connect/certs
+  OIDC_AUDIENCE: daleel-api
+  APP_DB_USER: daleel_app
+  S3_ENDPOINT: ""        # host:port
+  S3_BUCKET: daleel
+  S3_SECURE: "true"
+  LLM_PROVIDER: fake     # fake | openai_compat
+  LLM_BASE_URL: ""
+  LLM_MODEL: fake-echo
+  LLM_TOOL_MODE: native
+  LLM_TIMEOUT_SECONDS: "60"
+  LLM_STREAM_USAGE: "true"
+  EMBEDDINGS_PROVIDER: fake   # fake | openai_compat | sentence_transformers
+  EMBEDDINGS_MODEL: BAAI/bge-m3
+  EMBEDDINGS_BASE_URL: ""
+  SMTP_HOST: ""
+  SMTP_PORT: "587"
+  SMTP_FROM: "Daleel <daleel@example.com>"
+  TICKETING_URL: ""
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  LOG_LEVEL: INFO
+
+# Secret settings. Either set them here (the chart creates a Secret) or name a Secret you
+# manage yourself with the same keys in `existingSecret`.
+secretEnv:
+  # postgresql+asyncpg://daleel_app:<password>@<host>:5432/daleel — the non-superuser app role,
+  # so row-level security applies. Create it first (see deploy/compose/postgres/init).
+  DATABASE_URL: ""
+  # Owner role for migrations (run by each API pod before it starts).
+  MIGRATIONS_DATABASE_URL: ""
+  REDIS_URL: ""
+  S3_ACCESS_KEY: ""
+  S3_SECRET_KEY: ""
+  LLM_API_KEY: ""
+  EMBEDDINGS_API_KEY: ""
+  TICKETING_TOKEN: ""
+existingSecret: ""
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }
+  autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70 }
+  pdb: { enabled: true, minAvailable: 1 }
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    # sentence_transformers (bge-m3 in process) needs ~3Gi; the fake or remote embedders far less.
+    limits: { memory: 1Gi }
+  autoscaling: { enabled: false, minReplicas: 1, maxReplicas: 4, targetCPUUtilizationPercentage: 70 }
+  pdb: { enabled: false, minAvailable: 1 }
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  autoscaling: { enabled: false, minReplicas: 2, maxReplicas: 4, targetCPUUtilizationPercentage: 70 }
+  pdb: { enabled: true, minAvailable: 1 }
+
+ingress:
+  enabled: true
+  className: nginx
+  host: daleel.example.com
+  tls: []   # - secretName: daleel-tls
+  # ingress-nginx: answers stream as server-sent events and approvals arrive over a WebSocket,
+  # so responses must not be buffered and long-lived connections must stay open.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: 26m
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: { type: RuntimeDefault }
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: [ALL] }
+
+# Throwaway Postgres (pgvector), Redis and MinIO inside the release, for kind and demos only:
+# no persistence, no backups. When enabled, the connection settings above are filled in for you.
+dev:
+  enabled: false
+  postgres:
+    image: pgvector/pgvector:pg16
+    password: dev-postgres-password
+    appPassword: dev-app-password
+  redis:
+    image: redis:7.4-alpine
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:d88920d6a50bd0b088223b688be3b76c63e6205dbe494437f67ba1240ea12880
+    accessKey: daleel-dev
+    secretKey: dev-minio-password
