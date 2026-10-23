@@ -5,6 +5,42 @@ get streamed answers that cite the exact passage, and let an agent propose actio
 
 The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six gated phases.
 
+## What it covers
+
+| Area | In Daleel |
+| --- | --- |
+| LLM applications | Provider-agnostic `LLMProvider` (Falcon via vLLM, Ollama or AI71; OpenAI; any OpenAI-compatible server) with streaming, native and JSON-mode tool calling, token and cost accounting |
+| RAG | Arabic-aware PDF/Word parsing with positions, heading-aware chunking, hybrid pgvector + full-text retrieval with RRF, streamed citations checked against what was retrieved, passage highlight in the PDF |
+| Agents, human in the loop | Hand-written tool loop; side effects always pause for an approver, who can edit the arguments; exactly-once execution; append-only audit log |
+| Arabic and English | Full RTL UI with logical CSS properties, every string translated, Arabic search normalization and stemming, reply-language detection |
+| Frontend | React 19, TypeScript (strict), TanStack Query, Radix, Tailwind; SSE client with resume; WebSocket notifications; Storybook design system |
+| Backend | FastAPI, Pydantic v2, async SQLAlchemy, Alembic, Arq workers, Redis Streams |
+| Security | Keycloak OIDC (PKCE), JWT verified against JWKS, RBAC on every route, tenant isolation by Postgres row-level security, per-document ACLs in SQL, prompt-injection tests |
+| Quality | pytest + Testcontainers (97% coverage), Vitest, Playwright with axe in both languages, keyboard-only flows, golden-set evals in CI |
+| Operations | OpenTelemetry traces from browser to model, Prometheus and Grafana, Langfuse, Docker Compose, Helm chart tested on kind, GHCR releases scanned by Trivy |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  browser["Browser<br/>React SPA"] -->|"OIDC (PKCE)"| kc["Keycloak"]
+  browser -->|"REST, SSE, WebSocket"| api["API<br/>FastAPI"]
+  api -->|"JWKS"| kc
+  api -->|"RLS per tenant"| pg[("Postgres<br/>pgvector + full text")]
+  api -->|"run events, jobs"| redis[("Redis")]
+  api -->|"files"| s3[("MinIO / S3")]
+  api -->|"chat, tools"| llm["Model server<br/>Falcon, Qwen, OpenAI…"]
+  api -->|"after approval"| fx["Email, tickets"]
+  worker["Worker<br/>Arq"] -->|"parse, chunk, embed"| pg
+  worker --> s3
+  redis --> worker
+  api & worker & browser -.->|"OTLP"| otel["OpenTelemetry → Tempo, Langfuse"]
+```
+
+A question streams back as server-sent events read from a Redis Stream, so a dropped connection resumes where it
+stopped. The agent retrieves passages the asker may read, answers with citations, and pauses for a person
+before any side effect. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the [ADRs](docs/adr).
+
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | Foundations: monorepo, compose stack, Keycloak SSO, `/api/me`, CI | Done |
@@ -12,7 +48,7 @@ The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six ga
 | 3 | RAG ingestion, hybrid retrieval, citations, PDF highlight | Done |
 | 4 | Agent loop with human approvals, audit log | Done |
 | 5 | RBAC/ACL everywhere, admin console, observability, Storybook | Done |
-| 6 | Evals in CI, Helm, release, live demo | Next |
+| 6 | Evals in CI, Helm, release, live demo | Done except the live demo (needs hosting) |
 
 ## Quick start
 
@@ -105,7 +141,56 @@ model server; the model call carries GenAI semantic-convention attributes, which
 - `packages/ui` has Storybook (`pnpm --filter @daleel/ui storybook`) with the accessibility addon failing stories
   on violations.
 
-### Choosing an embedding model
+## Evals
+
+`make evals` checks retrieval and grounded answers against [a golden set](evals/golden.jsonl) of 42 questions
+over the demo policies: English, Arabic, cross-lingual, and questions the documents can't answer. It ingests the
+PDFs with the real worker code into a throwaway Postgres, searches with the API's hybrid retrieval, and answers
+through the agent's prompt and citation filter.
+
+| Metric | Meaning | Gate |
+| --- | --- | --- |
+| recall@6 | The passage holding the answer is among the six retrieved | ≥ 0.85 |
+| citation precision | Cited passages hold the answer | ≥ 0.85 (0.80 with the fake model) |
+| faithfulness | Cited sentences' words appear in the passages they cite | ≥ 0.80 |
+| answer correctness, abstention | Expected facts in the answer; no citations for unanswerable questions | reported |
+
+CI runs it with the fake model and embeddings (deterministic, no model). To evaluate a real one:
+
+```bash
+make evals EVALS_ENV="LLM_PROVIDER=openai_compat LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5:3b"
+```
+
+| Run | recall@6 | citation precision | faithfulness | answer correctness |
+| --- | --- | --- | --- | --- |
+| CI (fake model, fake embeddings) | 1.00 | 0.83 | 1.00 | 0.53 |
+| `qwen2.5:3b` on an M1, fake embeddings | 1.00 | 0.90 | 0.79 | 0.93 |
+
+Why it is built this way: [ADR 0005](docs/adr/0005-evals-against-the-real-pipeline.md).
+
+## Deploying to Kubernetes
+
+The Helm chart in [deploy/helm/daleel](deploy/helm/daleel) runs the API, worker and web app with probes,
+non-root users, read-only root filesystems, autoscaling and disruption budgets. The ingress sends `/api` straight
+to the API with response buffering off (server-sent events) and long timeouts (the approvals WebSocket). Each API
+pod applies migrations before it starts; an advisory lock makes concurrent pods take turns.
+
+```bash
+helm install daleel oci://ghcr.io/officialkhairi/charts/daleel --version 0.6.0 -f my-values.yaml
+helm test daleel
+```
+
+Bring your own Postgres 16 with pgvector (create the app role first, as in
+[deploy/compose/postgres/init](deploy/compose/postgres/init)), Redis, S3-compatible storage and an OIDC
+provider; set them in `env` and `secretEnv` or point `existingSecret` at your own Secret. For a quick look,
+`--set dev.enabled=true` adds throwaway Postgres, Redis and MinIO to the release. CI installs the chart on kind
+with exactly that and runs `helm test` on every push.
+
+Pushing a `v*` tag runs [release.yml](.github/workflows/release.yml): images for the API, worker and web app go
+to GHCR (the release fails on fixable critical vulnerabilities found by Trivy, and the full report goes to code
+scanning), then the chart is published as an OCI artifact.
+
+## Choosing an embedding model
 
 | `EMBEDDINGS_PROVIDER` | What it does |
 | --- | --- |
@@ -158,6 +243,7 @@ make dev-web   # Vite on :5173, proxies /api to :8000
 make lint      # ruff, mypy, eslint, tsc
 make test      # pytest (Testcontainers Postgres, Redis, MinIO) + vitest
 make e2e       # Playwright + axe against the stack, with the fake LLM (then `make up` to restore .env)
+make evals     # golden-set evals (fake model by default, see Evals)
 make obs       # the stack plus OpenTelemetry, Tempo, Prometheus, Grafana and Langfuse
 make down      # stop; `make nuke` also deletes volumes
 ```
@@ -195,7 +281,9 @@ apps/worker      Arq jobs: parsing (PyMuPDF, python-docx), chunking, embeddings,
 apps/mock-ticketing  Stand-in for Jira/ServiceNow
 apps/web         React 19 + Vite SPA (features/chat, documents, citations, auth, profile)
 e2e              Playwright end-to-end tests
+evals            golden.jsonl and the eval harness
 packages/ui      Design tokens, shared components, Storybook
-deploy/compose   docker-compose.yml, Keycloak realm, Postgres init
+deploy/compose   docker-compose.yml, Keycloak realm, Postgres init, observability config
+deploy/helm      Helm chart (kind smoke test values in ci/)
 docs             PLAN.md, ARCHITECTURE.md, adr/, demo/ (sample policies)
 ```
