@@ -11,6 +11,9 @@ import { config } from "./config";
 import { AuthProvider } from "./features/auth/AuthProvider";
 import { createUserManager } from "./features/auth/oidc";
 import { ApiError } from "./lib/api";
+import { startTracing } from "./lib/tracing";
+
+void startTracing();
 
 const manager = createUserManager(config.oidcAuthority, config.oidcClientId);
 const queryClient = new QueryClient({

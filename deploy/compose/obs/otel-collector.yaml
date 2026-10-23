@@ -1,0 +1,48 @@
+# Receives OTLP from the API, worker and browser (via nginx /otel), sends traces to Tempo
+# (Grafana) and to Langfuse (LLM view of the same spans).
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+  # The worker polls Redis all the time; each poll is its own one-span trace. Drop those
+  # (Redis calls inside a request's trace are kept).
+  filter/redis-polling:
+    error_mode: ignore
+    traces:
+      span:
+        - 'IsRootSpan() and (attributes["db.system"] == "redis" or attributes["db.system.name"] == "redis")'
+  # The browser's spans carry user-agent noise; keep requests small.
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+extensions:
+  basicauth/langfuse:
+    client_auth:
+      username: ${env:LANGFUSE_PUBLIC_KEY}
+      password: ${env:LANGFUSE_SECRET_KEY}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  otlphttp/langfuse:
+    endpoint: http://langfuse-web:3000/api/public/otel
+    auth:
+      authenticator: basicauth/langfuse
+
+service:
+  extensions: [basicauth/langfuse]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/redis-polling, batch]
+      exporters: [otlp/tempo, otlphttp/langfuse]

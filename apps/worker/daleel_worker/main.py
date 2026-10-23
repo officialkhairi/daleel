@@ -14,6 +14,7 @@ from app.db.session import make_engine, make_sessionmaker
 from app.embeddings.base import EmbedKind
 from app.jobs import EMBED_TEXTS, INGEST_DOCUMENT
 from app.observability.logging import configure_logging
+from app.observability.tracing import configure_tracing, tracer
 from app.storage import ObjectStore
 from daleel_worker.embedders import build_embedder
 from daleel_worker.ingest import IngestDeps
@@ -25,6 +26,7 @@ Ctx = dict[str, Any]
 async def startup(ctx: Ctx) -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
+    configure_tracing(settings.otel_exporter_otlp_endpoint, settings.otel_service_name)
     http = httpx.AsyncClient()
     engine = make_engine(settings.database_url)
     store = ObjectStore.from_settings(settings)
@@ -51,7 +53,8 @@ async def shutdown(ctx: Ctx) -> None:
 
 
 async def ingest_document(ctx: Ctx, document_id: str, tenant_id: str) -> None:
-    await run_ingest(ctx["deps"], uuid.UUID(document_id), uuid.UUID(tenant_id))
+    with tracer.start_as_current_span("ingest_document", attributes={"document.id": document_id}):
+        await run_ingest(ctx["deps"], uuid.UUID(document_id), uuid.UUID(tenant_id))
 
 
 async def expire_approvals(ctx: Ctx) -> int:

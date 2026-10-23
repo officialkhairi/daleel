@@ -19,7 +19,12 @@ help: ## Show targets
 # --wait treats exited one-shot jobs (migrate, minio-init) as failures, so wait on the
 # long-running services only; the jobs still run as their dependencies.
 up: .env ## Build and start the full stack, wait until healthy
-	$(COMPOSE) up -d --build --wait web worker mailpit redis
+	$(COMPOSE) up -d --build --wait api web worker mailpit redis
+
+.PHONY: obs
+obs: .env ## Stack plus tracing/metrics: Grafana :3001, Prometheus :9091, Langfuse :3000
+	OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 VITE_OTEL=true \
+		$(COMPOSE) --profile obs up -d --build --wait api web worker mailpit redis grafana langfuse-web langfuse-worker otel-collector prometheus
 
 .PHONY: down
 down: ## Stop the stack (keeps volumes)
@@ -101,7 +106,7 @@ E2E_ENV := LLM_PROVIDER=fake LLM_MODEL=fake-echo LLM_FAKE_DELAY_MS=150 EMBEDDING
 
 .PHONY: e2e
 e2e: .env ## Playwright end-to-end tests against the compose stack (fake LLM)
-	$(E2E_ENV) $(COMPOSE) up -d --build --wait web worker mailpit redis
+	$(E2E_ENV) $(COMPOSE) up -d --build --wait api web worker mailpit redis
 	$(PNPM) --filter @daleel/e2e exec playwright install chromium
 	$(PNPM) --filter @daleel/e2e run test:e2e
 	@echo "Stack is in e2e mode (fake LLM). Run 'make up' to restore your .env settings."
