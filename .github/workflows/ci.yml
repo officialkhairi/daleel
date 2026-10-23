@@ -70,6 +70,28 @@ jobs:
       - run: pnpm -r run typecheck
       - run: pnpm -r run test
 
+  mock-ticketing:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mock-ticketing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run pytest -q
+
+  storybook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @daleel/ui build-storybook
+
   compose:
     runs-on: ubuntu-latest
     steps:

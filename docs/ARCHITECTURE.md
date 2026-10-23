@@ -122,6 +122,25 @@ approver ─▶ POST /api/approvals/{id} (approve | edit | reject) ─▶ last d
 - **Models without tool calling** (`LLM_TOOL_MODE=json`): the provider asks for a JSON decision constrained by a
   schema (`response_format`), turning it into the same tool-call events.
 
+## Phase 5: access control everywhere, admin, observability
+
+- **Access control** is enforced in three layers and tested in each: `require(role)` on every route (a test
+  walks the OpenAPI schema and checks anonymous calls get 401, plus a role × endpoint matrix), `acl_roles` in the
+  SQL of every document query and retrieval, and forced RLS on every tenant table (a test reads `pg_class` and
+  `pg_policies`). The UI hides what a role can't do, but nothing depends on it.
+- **Usage.** Each run records time to first token (question to first answer token, including retrieval),
+  latency, tokens and cost; tokens and cost add up across approval pauses. `usage_daily` is a view with
+  `security_invoker`, not a materialized view: Postgres can't apply RLS to materialized views, and this data
+  must never cross tenants.
+- **Metrics.** `GET /metrics` (API port only; nginx doesn't route it) exposes HTTP traffic by route template,
+  runs by outcome, TTFT, tokens, cost, tool calls, approval decisions, dropped citations and retrieval time.
+- **Traces.** With `OTEL_EXPORTER_OTLP_ENDPOINT` set, FastAPI, SQLAlchemy, httpx and Redis are instrumented and
+  each model call gets a `chat {model}` span with `gen_ai.*` attributes plus Langfuse's input/output. The SPA
+  (built with `VITE_OTEL=true`) instruments fetch and sends spans to `/otel`, which nginx forwards to the
+  collector; the collector fans traces out to Tempo and Langfuse. JSON logs carry the trace id.
+- **UI kit.** `packages/ui` holds the design tokens (including the validated chart palette, light and dark) and
+  shared components (Button, Badge, StatTile) with Storybook stories, consumed from source by the SPA.
+
 ## Known simplifications
 
 - One tenant per realm: `tenant` is a hard-coded claim (`acme`) on each client. Multi-tenant realms
@@ -138,3 +157,5 @@ approver ─▶ POST /api/approvals/{id} (approve | edit | reject) ─▶ last d
 - Approvers may approve their own requests (the demo has one officer). A four-eyes rule would be a check in
   `POST /api/approvals/{id}`.
 - In JSON tool mode answers arrive in one piece rather than streamed token by token.
+- Trace context isn't carried from the API into Arq jobs yet; ingestion traces start in the worker.
+- Langfuse runs with its own Postgres and ClickHouse inside the `obs` profile; production would use managed ones.
