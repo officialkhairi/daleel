@@ -1,7 +1,7 @@
 import asyncio
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -30,6 +30,9 @@ def run_offline() -> None:
 def _run_sync(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Every API pod runs the migrations before it starts (Helm init container); the lock
+        # makes them take turns, and the later ones find nothing left to do.
+        connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('daleel-migrations'))"))
         context.run_migrations()
 
 

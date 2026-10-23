@@ -1,0 +1,93 @@
+name: release
+
+# Push a version tag (v0.6.0) to publish images and the Helm chart to GHCR.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { component: api, context: apps/api, file: apps/api/Dockerfile }
+          - { component: worker, context: ., file: apps/worker/Dockerfile }
+          - { component: web, context: ., file: apps/web/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The SPA reads its OIDC settings at build time; set them as repository variables.
+          build-args: |
+            VITE_OIDC_AUTHORITY=${{ vars.VITE_OIDC_AUTHORITY }}
+            VITE_OIDC_CLIENT_ID=${{ vars.VITE_OIDC_CLIENT_ID || 'daleel-web' }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - name: Trivy (fails on fixable critical vulnerabilities)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}:${{ steps.meta.outputs.version }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Trivy report (high and critical) for code scanning
+        if: always()
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}:${{ steps.meta.outputs.version }}
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-${{ matrix.component }}.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.component }}.sarif
+          category: trivy-${{ matrix.component }}
+
+  chart:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - run: helm lint deploy/helm/daleel
+      - name: package and push to GHCR (OCI)
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$GITHUB_REF_TYPE" == tag ]] || version="0.0.0-${GITHUB_SHA::7}"
+          helm package deploy/helm/daleel --version "$version" --app-version "$version"
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "daleel-$version.tgz" "oci://${REGISTRY,,}/charts"

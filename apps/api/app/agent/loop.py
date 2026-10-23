@@ -34,6 +34,7 @@ from app.agent.tools import (
     ToolOutcome,
     execute,
     prepare,
+    search_summary,
     tools_for,
 )
 from app.chat.language import Language
@@ -415,7 +416,7 @@ async def _first_segment(segment: _Segment) -> list[Invocation]:
                 "call_id": PREFETCH_CALL_ID,
                 "tool": "search_documents",
                 "args": {"query": spec.question},
-                "summary": f"Found {len(found)} passages in {documents} documents",
+                "summary": search_summary(len(found), documents),
                 "ok": True,
                 "data": {"passages": len(found), "documents": documents},
             }
@@ -424,7 +425,7 @@ async def _first_segment(segment: _Segment) -> list[Invocation]:
             ToolResult(
                 call_id=PREFETCH_CALL_ID,
                 tool="search_documents",
-                summary=f"Found {len(found)} passages in {documents} documents",
+                summary=search_summary(len(found), documents),
                 ok=True,
                 duration_ms=round((time.perf_counter() - started) * 1000),
                 data={"passages": len(found), "documents": documents},

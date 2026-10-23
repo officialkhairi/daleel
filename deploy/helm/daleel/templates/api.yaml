@@ -1,0 +1,75 @@
+{{- $c := dict "ctx" $ "component" "api" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "daleel.fullname" . }}-api
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" $c | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" $c | nindent 8 }}
+      annotations:
+        {{- include "daleel.configChecksum" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "daleel.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        # Every pod migrates before it serves; an advisory lock in the migrations makes
+        # concurrent pods take turns.
+        - name: migrate
+          image: {{ include "daleel.image" $c }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          envFrom: {{- include "daleel.envFrom" . | nindent 12 }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      containers:
+        - name: api
+          image: {{ include "daleel.image" $c }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom: {{- include "daleel.envFrom" . | nindent 12 }}
+          env:
+            - { name: OTEL_SERVICE_NAME, value: daleel-api }
+          ports:
+            - { name: http, containerPort: 8000 }
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "daleel.fullname" . }}-api
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "daleel.selector" $c | nindent 4 }}
+  ports:
+    - { name: http, port: 8000, targetPort: http }

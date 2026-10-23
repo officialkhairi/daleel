@@ -1,0 +1,33 @@
+{{- /* `helm test`: the API is ready (database reachable, migrations applied), rejects anonymous
+callers, and the SPA is served. */ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "daleel.fullname" . }}-smoke
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext: {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: smoke
+      image: {{ include "daleel.image" (dict "ctx" $ "component" "api") }}
+      securityContext: {{- toYaml .Values.securityContext | nindent 8 }}
+      command:
+        - python
+        - -c
+        - |
+          import urllib.error, urllib.request
+          api = "http://{{ include "daleel.fullname" . }}-api:8000"
+          web = "http://{{ include "daleel.fullname" . }}-web"
+          assert urllib.request.urlopen(f"{api}/readyz").status == 200
+          try:
+              urllib.request.urlopen(f"{api}/api/me")
+              raise SystemExit("/api/me answered without a token")
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 401, exc.code
+          assert b'id="root"' in urllib.request.urlopen(web).read()
+          print("smoke ok")

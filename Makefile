@@ -73,6 +73,8 @@ dev-web: ## Run the SPA on the host with Vite
 lint: ## ruff, mypy, eslint, tsc
 	$(API) uv run ruff check . && uv run ruff format --check . && uv run mypy
 	$(WORKER) uv run ruff check . && uv run ruff format --check . && uv run mypy
+	$(WORKER) uv run ruff check --config pyproject.toml ../../evals \
+		&& uv run ruff format --config pyproject.toml --check ../../evals && uv run mypy ../../evals
 	$(PNPM) -r run lint
 	$(PNPM) -r run typecheck
 
@@ -80,6 +82,7 @@ lint: ## ruff, mypy, eslint, tsc
 fmt: ## Auto-format
 	$(API) uv run ruff check --fix . && uv run ruff format .
 	$(WORKER) uv run ruff check --fix . && uv run ruff format .
+	$(WORKER) uv run ruff check --config pyproject.toml --fix ../../evals && uv run ruff format --config pyproject.toml ../../evals
 
 .PHONY: test
 test: test-api test-worker test-web ## Backend + frontend tests
@@ -111,6 +114,10 @@ e2e: .env ## Playwright end-to-end tests against the compose stack (fake LLM)
 	$(PNPM) --filter @daleel/e2e run test:e2e
 	@echo "Stack is in e2e mode (fake LLM). Run 'make up' to restore your .env settings."
 
+# Deterministic by default (as in CI). To evaluate a real model, override, e.g.
+#   make evals EVALS_ENV="LLM_PROVIDER=openai_compat LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5:3b"
+EVALS_ENV ?= LLM_PROVIDER=fake LLM_MODEL=fake-echo EMBEDDINGS_PROVIDER=fake
+
 .PHONY: evals
-evals: ## Golden-set evals
-	@echo "evals: not yet (arrives in Phase 6)"
+evals: ## Golden-set evals: recall@6, citation precision, faithfulness (evals/golden.jsonl)
+	$(WORKER) env $(EVALS_ENV) uv run python ../../evals/run_evals.py
