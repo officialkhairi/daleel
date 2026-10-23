@@ -33,8 +33,8 @@ class RetrievedChunk:
     ranks: dict[str, int] = field(default_factory=dict)
 
 
-def _base(roles: Sequence[str]) -> Select[Any]:
-    return (
+def _base(roles: Sequence[str], document_ids: Sequence[uuid.UUID] | None = None) -> Select[Any]:
+    stmt = (
         select(
             Chunk.id,
             Chunk.document_id,
@@ -47,6 +47,9 @@ def _base(roles: Sequence[str]) -> Select[Any]:
         .join(Document, Document.id == Chunk.document_id)
         .where(Document.status == "ready", Document.acl_roles.overlap(list(roles)))
     )
+    if document_ids:
+        stmt = stmt.where(Document.id.in_(list(document_ids)))
+    return stmt
 
 
 def _row(row: Any) -> RetrievedChunk:
@@ -62,18 +65,31 @@ def _row(row: Any) -> RetrievedChunk:
 
 
 async def vector_search(
-    session: AsyncSession, vector: list[float], roles: Sequence[str], limit: int
+    session: AsyncSession,
+    vector: list[float],
+    roles: Sequence[str],
+    limit: int,
+    document_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
     # With a WHERE clause, HNSW may stop before finding `limit` matches; iterative scans keep
     # going (pgvector >= 0.8).
     await session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
     distance = Chunk.embedding.cosine_distance(vector)
-    stmt = _base(roles).where(Chunk.embedding.is_not(None)).order_by(distance).limit(limit)
+    stmt = (
+        _base(roles, document_ids)
+        .where(Chunk.embedding.is_not(None))
+        .order_by(distance)
+        .limit(limit)
+    )
     return [_row(r) for r in (await session.execute(stmt)).all()]
 
 
 async def keyword_search(
-    session: AsyncSession, query: str, roles: Sequence[str], limit: int
+    session: AsyncSession,
+    query: str,
+    roles: Sequence[str],
+    limit: int,
+    document_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
     # plainto_tsquery ANDs every word, which rarely matches a whole question; OR them instead and
     # let ts_rank_cd reward chunks that match more of them. Both stemmers run on the query because
@@ -83,7 +99,12 @@ async def keyword_search(
         " || replace(plainto_tsquery('arabic', :q)::text, '&', '|')::tsquery)"
     )
     rank = func.ts_rank_cd(Chunk.tsv, tsquery)
-    stmt = _base(roles).where(Chunk.tsv.op("@@")(tsquery)).order_by(rank.desc()).limit(limit)
+    stmt = (
+        _base(roles, document_ids)
+        .where(Chunk.tsv.op("@@")(tsquery))
+        .order_by(rank.desc())
+        .limit(limit)
+    )
     rows = (await session.execute(stmt, {"q": query})).all()
     return [_row(r) for r in rows]
 
@@ -111,6 +132,7 @@ async def retrieve(
     candidates: int,
     top_k: int,
     rrf_k: int,
+    document_ids: Sequence[uuid.UUID] | None = None,
 ) -> list[RetrievedChunk]:
     async def by_vector() -> list[RetrievedChunk]:
         try:
@@ -120,11 +142,11 @@ async def retrieve(
             log.warning("vector search skipped: %s", exc)
             return []
         async with tenant_session(sessions, tenant_id) as session:
-            return await vector_search(session, vector, roles, candidates)
+            return await vector_search(session, vector, roles, candidates, document_ids)
 
     async def by_keyword() -> list[RetrievedChunk]:
         async with tenant_session(sessions, tenant_id) as session:
-            return await keyword_search(session, query, roles, candidates)
+            return await keyword_search(session, query, roles, candidates, document_ids)
 
     vector_results, keyword_results = await asyncio.gather(by_vector(), by_keyword())
     return fuse({"vector": vector_results, "keyword": keyword_results}, k=rrf_k, top_k=top_k)

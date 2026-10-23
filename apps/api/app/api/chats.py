@@ -6,11 +6,14 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.agent.factory import agent_deps
+from app.agent.loop import Retriever, start_run
+from app.agent.schemas import ApprovalOut, load_approvals
 from app.auth.deps import require
 from app.auth.principal import Principal
 from app.chat import repo
-from app.chat.runner import Pricing, Retriever, execute_run
-from app.chat.service import start_run
+from app.chat.service import start_run as prepare_run
+from app.db.models import Approval
 from app.db.session import tenant_session
 from app.errors import NotFound
 from app.rag.retrieve import RetrievedChunk, retrieve
@@ -52,6 +55,9 @@ class MessageOut(BaseModel):
     citations: list[dict[str, Any]] | None = Field(
         default=None, description="Payloads of the `citation` events the answer produced."
     )
+    tool_calls: list[dict[str, Any]] | None = Field(
+        default=None, description="Tools the answer used, with approval ids for side effects."
+    )
     model: str | None
     tokens_in: int | None
     tokens_out: int | None
@@ -61,6 +67,9 @@ class MessageOut(BaseModel):
 class ChatDetail(BaseModel):
     chat: ChatOut
     messages: list[MessageOut]
+    approvals: list[ApprovalOut] = Field(
+        default_factory=list, description="Approvals proposed in this chat (newest first)."
+    )
     active_run_id: uuid.UUID | None = Field(
         description="Set while an answer is generating; resume it via /api/runs/{id}/events."
     )
@@ -96,9 +105,11 @@ async def get(
             raise NotFound("Chat not found.")
         messages = await repo.list_messages(session, chat.id)
         run = await repo.active_run(session, chat.id)
+        approvals = await load_approvals(session, Approval.chat_id == chat.id)
         return ChatDetail(
             chat=ChatOut.model_validate(chat),
             messages=[MessageOut.model_validate(m) for m in messages],
+            approvals=approvals,
             active_run_id=run.id if run else None,
         )
 
@@ -139,7 +150,7 @@ async def _run_and_stream(
     request: Request, principal: Principal, chat_id: uuid.UUID, content: str | None
 ) -> StreamingResponse:
     state = request.app.state
-    started = await start_run(
+    started = await prepare_run(
         state.sessions,
         principal,
         chat_id,
@@ -151,16 +162,7 @@ async def _run_and_stream(
     # Published before the task starts, so a reader never waits on an empty stream.
     await state.bus.publish(spec.run_id, RunStarted(run_id=spec.run_id, model=spec.model))
     state.tasks.spawn(
-        execute_run(
-            spec,
-            provider=state.provider,
-            bus=state.bus,
-            sessions=state.sessions,
-            pricing=Pricing(
-                state.settings.llm_price_in_per_mtok, state.settings.llm_price_out_per_mtok
-            ),
-            retriever=_retriever(state, principal),
-        ),
+        start_run(spec, agent_deps(state, _retriever(state, principal))),
         name=f"run-{spec.run_id}",
     )
     return sse_response(state.bus, spec.run_id)

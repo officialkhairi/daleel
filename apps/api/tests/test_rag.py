@@ -211,7 +211,8 @@ async def test_answer_cites_sources_and_drops_invented_ones(
     )
     events = parse_sse(response.text)
 
-    assert names(events)[:2] == ["run.started", "token"]
+    assert names(events)[:4] == ["run.started", "tool.started", "tool.result", "token"]
+    assert events[2][2]["data"] == {"passages": 3, "documents": 1}
     cited = [data for _, name, data in events if name == "citation"]
     assert [c["n"] for c in cited] == [1, 2]
     first = cited[0]

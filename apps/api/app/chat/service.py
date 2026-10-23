@@ -6,13 +6,15 @@ import re
 import uuid
 from dataclasses import dataclass
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agent import audit
+from app.agent.loop import RunSpec
 from app.auth.principal import Principal
 from app.chat import repo
 from app.chat.language import Language, detect_language, reply_note, system_prompt
-from app.chat.runner import RunSpec
-from app.db.models import Chat, Message, Run
+from app.db.models import Approval, Chat, Message, Run
 from app.db.session import tenant_session
 from app.errors import AppError, NotFound
 from app.llm.base import ChatMessage
@@ -61,6 +63,40 @@ def _reply_language(question: str, principal: Principal) -> Language:
     return detect_language(question, fallback="ar" if principal.locale == "ar" else "en")
 
 
+async def _supersede_pending_approvals(
+    session: AsyncSession, chat: Chat, principal: Principal, user_id: uuid.UUID
+) -> None:
+    """A new question moves the conversation on: actions still waiting for approval from an
+    earlier answer won't be carried out."""
+    paused = (
+        await session.scalars(
+            select(Run).where(Run.chat_id == chat.id, Run.status == "awaiting_approval")
+        )
+    ).all()
+    for run in paused:
+        approvals = (
+            await session.scalars(
+                select(Approval).where(Approval.run_id == run.id, Approval.status == "pending")
+            )
+        ).all()
+        for approval in approvals:
+            approval.status = "expired"
+            approval.reason = "Superseded by a newer question."
+            approval.decided_at = func.now()
+            await audit.record(
+                session,
+                tenant_id=principal.tenant_id,
+                actor_id=user_id,
+                actor=principal.username,
+                action="approval.superseded",
+                target_type="approval",
+                target_id=approval.id,
+                details={"tool": approval.tool},
+            )
+        run.status = "cancelled"
+        run.finished_at = func.now()
+
+
 async def _locked_chat(session: AsyncSession, chat_id: uuid.UUID, user_id: uuid.UUID) -> Chat:
     chat = await repo.get_chat(session, chat_id, user_id, lock=True)
     if chat is None:
@@ -84,6 +120,7 @@ async def start_run(
     async with tenant_session(sessions, principal.tenant_id) as session:
         user_id = await repo.ensure_user_id(session, principal)
         chat = await _locked_chat(session, chat_id, user_id)
+        await _supersede_pending_approvals(session, chat, principal, user_id)
 
         if content is not None:
             user_message = Message(
@@ -116,6 +153,9 @@ async def start_run(
         run_id=run.id,
         chat_id=chat.id,
         tenant_id=principal.tenant_id,
+        user_id=user_id,
+        username=principal.username,
+        roles=frozenset(principal.roles),
         model=model,
         history=_history(list(history), language),
         question=user_message.content,
