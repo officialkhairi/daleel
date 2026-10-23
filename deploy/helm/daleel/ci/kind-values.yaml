@@ -1,0 +1,22 @@
+# kind smoke test (.github/workflows/ci.yml): locally built images, in-release dependencies,
+# fake model and embeddings, no ingress controller.
+image:
+  registry: daleel.local
+  tag: ci
+  pullPolicy: Never
+dev:
+  enabled: true
+ingress:
+  enabled: false
+env:
+  OIDC_ISSUER: http://keycloak.invalid/realms/daleel
+  OIDC_JWKS_URL: http://keycloak.invalid/realms/daleel/protocol/openid-connect/certs
+api:
+  replicas: 1
+  autoscaling: { enabled: false }
+  resources: { requests: { cpu: 50m, memory: 128Mi } }
+web:
+  replicas: 1
+  resources: { requests: { cpu: 10m, memory: 16Mi } }
+worker:
+  resources: { requests: { cpu: 50m, memory: 128Mi } }

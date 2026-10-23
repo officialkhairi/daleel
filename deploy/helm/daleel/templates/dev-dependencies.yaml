@@ -1,0 +1,158 @@
+{{- /* Throwaway backing services for kind and demos (dev.enabled). No persistence. */ -}}
+{{- if .Values.dev.enabled }}
+{{- $pg := include "daleel.devHost" (dict "ctx" . "name" "postgres") }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $pg }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  POSTGRES_USER: daleel
+  POSTGRES_DB: daleel
+  POSTGRES_PASSWORD: {{ .Values.dev.postgres.password | quote }}
+  APP_DB_USER: {{ .Values.env.APP_DB_USER | quote }}
+  APP_DB_PASSWORD: {{ .Values.dev.postgres.appPassword | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $pg }}-init
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+data:
+  01-app-role.sh: |
+    {{- .Files.Get "files/01-app-role.sh" | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $pg }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" (dict "ctx" . "component" "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" (dict "ctx" . "component" "postgres") | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.dev.postgres.image }}
+          envFrom:
+            - secretRef: { name: {{ $pg }} }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U daleel -d daleel"] }
+            periodSeconds: 3
+          volumeMounts:
+            - { name: init, mountPath: /docker-entrypoint-initdb.d }
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - { name: init, configMap: { name: {{ $pg }}-init } }
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $pg }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "daleel.selector" (dict "ctx" . "component" "postgres") | nindent 4 }}
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+{{- $redis := include "daleel.devHost" (dict "ctx" . "name" "redis") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $redis }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" (dict "ctx" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" (dict "ctx" . "component" "redis") | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.dev.redis.image }}
+          ports:
+            - { name: redis, containerPort: 6379 }
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $redis }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "daleel.selector" (dict "ctx" . "component" "redis") | nindent 4 }}
+  ports:
+    - { name: redis, port: 6379, targetPort: redis }
+---
+{{- $minio := include "daleel.devHost" (dict "ctx" . "name" "minio") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $minio }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      {{- include "daleel.selector" (dict "ctx" . "component" "minio") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "daleel.selector" (dict "ctx" . "component" "minio") | nindent 8 }}
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.dev.minio.image }}
+          args: ["server", "/data"]
+          env:
+            - { name: MINIO_ROOT_USER, value: {{ .Values.dev.minio.accessKey | quote }} }
+            - { name: MINIO_ROOT_PASSWORD, value: {{ .Values.dev.minio.secretKey | quote }} }
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: s3 }
+            periodSeconds: 3
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $minio }}
+  labels:
+    {{- include "daleel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "daleel.selector" (dict "ctx" . "component" "minio") | nindent 4 }}
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }
+{{- end }}
