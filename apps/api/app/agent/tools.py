@@ -7,6 +7,7 @@ model sees and what the approval form is generated from) and a fixed policy:
 The policy lives here, in code, so no prompt or document can change it."""
 
 import asyncio
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
@@ -14,7 +15,7 @@ from dataclasses import dataclass, field
 from html import escape
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError
+from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -117,6 +118,14 @@ class _Args(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _split_list(value: Any) -> Any:
+    """Small models often send one string where the schema asks for a list ("a@x.com" or
+    "a@x.com, b@x.com"); accept that instead of failing the call."""
+    if isinstance(value, str):
+        return [part.strip() for part in re.split(r"[,;]", value) if part.strip()]
+    return value
+
+
 # --- argument models ------------------------------------------------------------------------
 
 
@@ -152,7 +161,9 @@ class CreateTicketArgs(_Args):
 
 
 class SendEmailArgs(_Args):
-    to: list[EmailStr] = Field(min_length=1, max_length=10, description="Recipients.")
+    to: Annotated[list[EmailStr], BeforeValidator(_split_list)] = Field(
+        min_length=1, max_length=10, description="Recipients."
+    )
     subject: Annotated[str, Field(min_length=1, max_length=200)]
     body: Annotated[str, Field(min_length=1, max_length=10_000)]
 
