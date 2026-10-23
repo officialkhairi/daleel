@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchRouter, json } from "../../test/fetchRouter";
 import { AuthProvider, useAuth, type AuthManager } from "../auth/AuthProvider";
 import type { DocumentInfo } from "./api";
+import { useNotifications } from "../notifications/useNotifications";
 import { DocumentsPage } from "./DocumentsPage";
 
 class FakeSocket {
@@ -60,8 +61,13 @@ function manager(): AuthManager {
   };
 }
 
+function Page() {
+  useNotifications(); // mounted by the app shell in real use
+  return <DocumentsPage />;
+}
+
 function SignedIn() {
-  return useAuth().state.status === "signedIn" ? <DocumentsPage /> : null;
+  return useAuth().state.status === "signedIn" ? <Page /> : null;
 }
 
 function renderPage(roles: string[], documents: DocumentInfo[]) {

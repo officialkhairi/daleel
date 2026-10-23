@@ -62,7 +62,10 @@
   "nav": {
     "label": "Main",
     "chat": "Chat",
-    "documents": "Documents"
+    "documents": "Documents",
+    "approvals": "Approvals",
+    "pendingCount_one": "{{count}} waiting",
+    "pendingCount_other": "{{count}} waiting"
   },
   "documents": {
     "heading": "Documents",
@@ -117,5 +120,91 @@
     "crashTitle": "Something went wrong on this page",
     "crashBody": "Your chats and documents are safe. Reload to continue.",
     "reload": "Reload"
+  },
+  "tools": {
+    "stepsLabel": "Steps",
+    "search_documents": {
+      "running": "Searching the documents…",
+      "done": "Searched the documents",
+      "propose": "Search the documents",
+      "summary": "Found {{passages}} passages in {{documents}} documents"
+    },
+    "get_document": {
+      "running": "Reading a document…",
+      "done": "Read a document",
+      "propose": "Read a document",
+      "summary": "Read {{passages}} passages of {{title}}"
+    },
+    "compare_clauses": {
+      "running": "Comparing documents…",
+      "done": "Compared documents",
+      "propose": "Compare documents",
+      "summary": "Compared {{a}} with {{b}}"
+    },
+    "summarize_document": {
+      "running": "Reading a document to summarize…",
+      "done": "Read a document to summarize",
+      "propose": "Summarize a document",
+      "summary": "Read {{title}}"
+    },
+    "create_ticket": {
+      "running": "Opening a ticket…",
+      "done": "Ticket",
+      "propose": "Open a ticket",
+      "summary": "Created ticket {{key}}"
+    },
+    "send_email": {
+      "running": "Sending the email…",
+      "done": "Email",
+      "propose": "Send an email",
+      "summary": "Sent to {{recipients}}"
+    },
+    "flag_clause": {
+      "running": "Flagging the clause…",
+      "done": "Flagged clause",
+      "propose": "Flag a clause",
+      "summary": "Flagged a clause in {{title}}"
+    }
+  },
+  "approvals": {
+    "heading": "Approvals",
+    "lead": "Actions the assistant proposed. Nothing is sent or changed until someone approves it.",
+    "empty": "Nothing is waiting for approval.",
+    "requested": "{{name}} asked on {{when}} in",
+    "expires": "expires {{when}}",
+    "cardLabel": "Approval: {{action}}",
+    "approve": "Approve",
+    "approveEdited": "Approve with edits",
+    "reject": "Reject",
+    "reasonLabel": "Note (optional, saved in the audit log)",
+    "reasonGiven": "Reason: {{reason}}",
+    "risk": {
+      "low": "Low risk",
+      "medium": "Medium risk",
+      "high": "High risk"
+    },
+    "status": {
+      "approved": "Approved by {{name}}",
+      "edited": "Approved with edits by {{name}}",
+      "rejected": "Rejected by {{name}}",
+      "expired": "Expired without a decision",
+      "needsYou": "Needs your approval",
+      "waiting": "Waiting for an approver"
+    },
+    "fields": {
+      "to": "To",
+      "subject": "Subject",
+      "body": "Message",
+      "title": "Title",
+      "priority": "Priority",
+      "reason": "Reason",
+      "document_id": "Document",
+      "chunk_id": "Passage"
+    },
+    "options": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    }
   }
 }

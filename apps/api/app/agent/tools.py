@@ -257,7 +257,7 @@ async def _compare(ctx: ToolContext, args: CompareClausesArgs) -> ToolOutcome:
             f"From {escape(b[0].title)}:\n{SourcePool.render(second)}"
         ),
         summary=f"Compared {a[0].title} with {b[0].title}",
-        data={"documents": [a[0].title, b[0].title]},
+        data={"documents": [a[0].title, b[0].title], "a": a[0].title, "b": b[0].title},
     )
 
 
@@ -280,7 +280,7 @@ async def _create_ticket(ctx: ToolContext, args: CreateTicketArgs) -> ToolOutcom
     return ToolOutcome(
         content=f"Ticket {key} was created.",
         summary=f"Created ticket {key}",
-        data={"ticket": ticket},
+        data={"ticket": ticket, "key": key},
     )
 
 
@@ -295,7 +295,7 @@ async def _send_email(ctx: ToolContext, args: SendEmailArgs) -> ToolOutcome:
     return ToolOutcome(
         content=f"The email was sent to {', '.join(recipients)}.",
         summary=f"Sent email to {', '.join(recipients)}",
-        data={"to": recipients, "message_id": message_id},
+        data={"to": recipients, "recipients": ", ".join(recipients), "message_id": message_id},
     )
 
 
@@ -348,7 +348,10 @@ class Tool:
         return ToolSpec(name=self.name, description=self.description, parameters=self.json_schema())
 
     def json_schema(self) -> dict[str, Any]:
-        return self.args.model_json_schema()
+        schema = self.args.model_json_schema()
+        # jsonb doesn't keep object key order; forms read the field order from this list.
+        schema["x-order"] = list(schema.get("properties", {}))
+        return schema
 
     def parse(self, raw: dict[str, Any]) -> BaseModel:
         return self.args.model_validate(raw)

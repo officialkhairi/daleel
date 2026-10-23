@@ -62,7 +62,14 @@
   "nav": {
     "label": "الرئيسية",
     "chat": "المحادثة",
-    "documents": "المستندات"
+    "documents": "المستندات",
+    "approvals": "الموافقات",
+    "pendingCount_zero": "لا شيء بانتظار",
+    "pendingCount_one": "طلب واحد بانتظار",
+    "pendingCount_two": "طلبان بانتظار",
+    "pendingCount_few": "{{count}} طلبات بانتظار",
+    "pendingCount_many": "{{count}} طلبًا بانتظار",
+    "pendingCount_other": "{{count}} طلب بانتظار"
   },
   "documents": {
     "heading": "المستندات",
@@ -121,5 +128,91 @@
     "crashTitle": "حدث خطأ في هذه الصفحة",
     "crashBody": "محادثاتك ومستنداتك محفوظة. أعد التحميل للمتابعة.",
     "reload": "إعادة التحميل"
+  },
+  "tools": {
+    "stepsLabel": "الخطوات",
+    "search_documents": {
+      "running": "جارٍ البحث في المستندات…",
+      "done": "تم البحث في المستندات",
+      "propose": "البحث في المستندات",
+      "summary": "وُجد {{passages}} مقطعًا في {{documents}} مستندات"
+    },
+    "get_document": {
+      "running": "جارٍ قراءة مستند…",
+      "done": "تمت قراءة مستند",
+      "propose": "قراءة مستند",
+      "summary": "تمت قراءة {{passages}} مقاطع من {{title}}"
+    },
+    "compare_clauses": {
+      "running": "جارٍ مقارنة المستندات…",
+      "done": "تمت مقارنة المستندات",
+      "propose": "مقارنة مستندات",
+      "summary": "تمت مقارنة {{a}} مع {{b}}"
+    },
+    "summarize_document": {
+      "running": "جارٍ قراءة مستند لتلخيصه…",
+      "done": "تمت قراءة مستند لتلخيصه",
+      "propose": "تلخيص مستند",
+      "summary": "تمت قراءة {{title}}"
+    },
+    "create_ticket": {
+      "running": "جارٍ فتح تذكرة…",
+      "done": "التذكرة",
+      "propose": "فتح تذكرة",
+      "summary": "أُنشئت التذكرة {{key}}"
+    },
+    "send_email": {
+      "running": "جارٍ إرسال البريد…",
+      "done": "البريد",
+      "propose": "إرسال بريد إلكتروني",
+      "summary": "أُرسل إلى {{recipients}}"
+    },
+    "flag_clause": {
+      "running": "جارٍ وضع علامة على البند…",
+      "done": "بند عليه علامة",
+      "propose": "وضع علامة على بند",
+      "summary": "وُضعت علامة على بند في {{title}}"
+    }
+  },
+  "approvals": {
+    "heading": "الموافقات",
+    "lead": "إجراءات اقترحها المساعد. لا يُرسل شيء ولا يتغير حتى يوافق عليه أحد.",
+    "empty": "لا يوجد ما ينتظر الموافقة.",
+    "requested": "طلبه {{name}} في {{when}} ضمن",
+    "expires": "ينتهي {{when}}",
+    "cardLabel": "موافقة: {{action}}",
+    "approve": "موافقة",
+    "approveEdited": "موافقة مع التعديلات",
+    "reject": "رفض",
+    "reasonLabel": "ملاحظة (اختيارية، تُحفظ في سجل التدقيق)",
+    "reasonGiven": "السبب: {{reason}}",
+    "risk": {
+      "low": "خطورة منخفضة",
+      "medium": "خطورة متوسطة",
+      "high": "خطورة عالية"
+    },
+    "status": {
+      "approved": "وافق عليه {{name}}",
+      "edited": "وافق عليه {{name}} مع تعديلات",
+      "rejected": "رفضه {{name}}",
+      "expired": "انتهت المهلة دون قرار",
+      "needsYou": "بانتظار موافقتك",
+      "waiting": "بانتظار مُعتمِد"
+    },
+    "fields": {
+      "to": "إلى",
+      "subject": "الموضوع",
+      "body": "الرسالة",
+      "title": "العنوان",
+      "priority": "الأولوية",
+      "reason": "السبب",
+      "document_id": "المستند",
+      "chunk_id": "المقطع"
+    },
+    "options": {
+      "low": "منخفضة",
+      "medium": "متوسطة",
+      "high": "عالية"
+    }
   }
 }

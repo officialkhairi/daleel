@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 
 import { useAuth } from "./features/auth/AuthProvider";
 import { SignInScreen } from "./features/auth/SignInScreen";
+import { usePendingApprovals } from "./features/approvals/api";
+import { ApprovalsPage } from "./features/approvals/ApprovalsPage";
 import { ChatPage } from "./features/chat/ChatPage";
+import { useNotifications } from "./features/notifications/useNotifications";
+import { useMe } from "./features/profile/useMe";
 import { DocumentsPage } from "./features/documents/DocumentsPage";
 import { ProfileDialog } from "./features/profile/ProfileDialog";
 import { LanguageToggle } from "./LanguageToggle";
@@ -41,7 +45,12 @@ function Shell() {
   const { t } = useTranslation();
   const { signOut } = useAuth();
   const path = usePathname();
-  const onDocuments = path.startsWith("/documents");
+  const me = useMe();
+  useNotifications();
+  const isApprover = me.data?.roles.some((r) => r === "approver" || r === "admin") ?? false;
+  const pending = usePendingApprovals(isApprover);
+  const pendingCount = pending.data?.length ?? 0;
+  const page = path.startsWith("/documents") ? "documents" : path.startsWith("/approvals") && isApprover ? "approvals" : "chat";
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-b border-line bg-surface">
@@ -53,12 +62,23 @@ function Shell() {
             </span>
           </span>
           <nav aria-label={t("nav.label")} className="flex items-center gap-1">
-            <NavLink href="/" current={!onDocuments}>
+            <NavLink href="/" current={page === "chat"}>
               {t("nav.chat")}
             </NavLink>
-            <NavLink href="/documents" current={onDocuments}>
+            <NavLink href="/documents" current={page === "documents"}>
               {t("nav.documents")}
             </NavLink>
+            {isApprover && (
+              <NavLink href="/approvals" current={page === "approvals"}>
+                {t("nav.approvals")}
+                {pendingCount > 0 && (
+                  <span className="ms-1.5 rounded-full bg-[var(--color-focus)] px-1.5 text-xs text-ink">
+                    <span className="sr-only">{t("nav.pendingCount", { count: pendingCount })}</span>
+                    <span aria-hidden>{pendingCount}</span>
+                  </span>
+                )}
+              </NavLink>
+            )}
           </nav>
           <div className="ms-auto flex items-center gap-2">
             <LanguageToggle />
@@ -73,7 +93,7 @@ function Shell() {
           </div>
         </div>
       </header>
-      {onDocuments ? <DocumentsPage /> : <ChatPage />}
+      {page === "documents" ? <DocumentsPage /> : page === "approvals" ? <ApprovalsPage /> : <ChatPage />}
     </div>
   );
 }

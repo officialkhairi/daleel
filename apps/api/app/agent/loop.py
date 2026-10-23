@@ -283,7 +283,7 @@ class _Segment:
         )
         for call in self.calls:
             if call["call_id"] == call_id:
-                call.update(summary=outcome.summary, ok=outcome.ok)
+                call.update(summary=outcome.summary, ok=outcome.ok, data=outcome.data)
         await self.publish(
             ToolResult(
                 call_id=call_id,
@@ -365,6 +365,7 @@ async def _first_segment(segment: _Segment) -> list[Invocation]:
                 "args": {"query": spec.question},
                 "summary": f"Found {len(found)} passages in {documents} documents",
                 "ok": True,
+                "data": {"passages": len(found), "documents": documents},
             }
         )
         await segment.publish(

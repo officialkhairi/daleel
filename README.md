@@ -10,8 +10,8 @@ The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six ga
 | 1 | Foundations: monorepo, compose stack, Keycloak SSO, `/api/me`, CI | Done |
 | 2 | Streaming chat over SSE through a provider-agnostic `LLMProvider` | Done |
 | 3 | RAG ingestion, hybrid retrieval, citations, PDF highlight | Done |
-| 4 | Agent loop with human approvals, audit log | Next |
-| 5 | RBAC/ACL everywhere, admin console, observability, Storybook | |
+| 4 | Agent loop with human approvals, audit log | Done |
+| 5 | RBAC/ACL everywhere, admin console, observability, Storybook | Next |
 | 6 | Evals in CI, Helm, release, live demo | |
 
 ## Quick start
@@ -37,7 +37,8 @@ Open <http://localhost:5173> and sign in. Demo users (local only, password `demo
 | Web app | <http://localhost:5173> |
 | API (OpenAPI docs) | <http://localhost:8000/docs> |
 | Keycloak admin (`admin` / see `.env`) | <http://localhost:8180> |
-| Mailpit | <http://localhost:8025> |
+| Mailpit (approved emails) | <http://localhost:8025> |
+| Mock ticketing (approved tickets) | <http://localhost:8090> |
 | MinIO console | <http://localhost:9001> |
 
 Keycloak runs on 8180, not 8080, because 8080 is often taken. Change `KEYCLOAK_PORT` and the URLs that use it in
@@ -55,6 +56,26 @@ anything that wasn't retrieved are removed before they reach you.
 
 Demo documents (fictional company) are in [docs/demo](docs/demo): an Arabic procurement policy and an English
 security policy.
+
+## Actions and approvals
+
+The assistant can act, not just answer. It searches and reads documents on its own, but anything that changes
+the outside world waits for a person:
+
+| Tool | What it does | Needs approval |
+| --- | --- | --- |
+| `search_documents`, `get_document`, `compare_clauses`, `summarize_document` | Read the documents you may see | No |
+| `send_email` | Sends an email (local: lands in [Mailpit](http://localhost:8025)) | Yes, high risk |
+| `create_ticket` | Opens a ticket (local: [mock ticketing](http://localhost:8090)) | Yes, medium risk |
+| `flag_clause` | Flags a passage for its owners (editors only) | Yes, low risk |
+
+The proposal appears as a card in the chat with the arguments as an editable form. Approvers (and admins) can
+approve, edit and approve, or reject with a note; anyone else sees it waiting. The **Approvals** page lists every
+pending request in your organisation. Approving resumes the answer where it paused; each approval executes at
+most once. Undecided requests expire after 24 hours, and a new question in the same chat supersedes them. Every
+request, decision and execution is written to an append-only audit log (`GET /api/audit`, admins).
+
+Try it: ask *"Draft a reminder to procurement about the approval thresholds"*, approve the card, and open Mailpit.
 
 ### Choosing an embedding model
 
@@ -126,7 +147,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [ADR 0002](docs/adr/0002-ss
 
 ```
 apps/api         FastAPI: auth/, db/ (Alembic), api/, llm/ (provider contract), observability/
-apps/worker      Arq jobs: parsing (PyMuPDF, python-docx), chunking, embeddings
+apps/worker      Arq jobs: parsing (PyMuPDF, python-docx), chunking, embeddings, approval expiry
+apps/mock-ticketing  Stand-in for Jira/ServiceNow
 apps/web         React 19 + Vite SPA (features/chat, documents, citations, auth, profile)
 e2e              Playwright end-to-end tests
 packages/ui      Design tokens (Tailwind v4 theme)

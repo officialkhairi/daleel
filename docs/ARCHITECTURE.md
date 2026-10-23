@@ -87,6 +87,41 @@ question ─▶ run ─▶ retrieve (vector ∥ keyword → RRF, role filter in 
   message, never the URL) forwards only events for documents the viewer's roles may see, and closes when the
   token expires.
 
+## Phase 4: agent and approvals
+
+```
+question ─▶ prefetch search (shown as search_documents) ─▶ model ⇄ read-only tools (parallel)  ×≤6 steps
+                                                              │
+                                     side-effect tool call ───┴─▶ approvals rows + run state saved
+                                                                  approval.required, run.completed(awaiting_approval)
+approver ─▶ POST /api/approvals/{id} (approve | edit | reject) ─▶ last decision? resume on the same event stream
+                 └─ execute once (tool_executions claim) ─▶ SMTP / ticketing ─▶ tool result ─▶ model ─▶ answer
+```
+
+- **Policy lives in code.** Each tool declares `auto` or `approve`, a risk level and the roles that may use it.
+  Model output, prompts and documents can't change it; a prompt-injection test proves a document telling the model
+  to email someone still yields only a proposal.
+- **Pause and resume.** On a side-effect call the run saves its conversation (including tool calls and results),
+  source pool and step count in `runs.state`, creates one `approvals` row per call (args, JSON Schema, risk,
+  expiry) and ends its stream with `run.completed(finish_reason="awaiting_approval")`. Deciding the last pending
+  approval of a run (row locks on the approval and the run) sets it running again and continues the agent loop
+  in the background, appending to the same Redis Stream; `resume_from` tells the client where to follow from.
+- **Exactly once.** Before running an approved effect, the loop inserts a `tool_executions` row keyed by the
+  approval (unique). A retry, a restart or a double click finds the row and returns the recorded result.
+- **Edits are re-validated** against the tool's argument model; invalid edits are a 422, never a partial send.
+- **Citations survive the pause**: the source pool is saved with the run, so `[n]` means the same passage before
+  and after.
+- **Expiry and superseding.** A worker cron calls `expire_stale_approvals()` every 5 minutes. It is `SECURITY
+  DEFINER` (it must see every tenant), only expires overdue pending approvals, closes their runs and writes the
+  audit entries. Asking a new question in a chat expires that chat's pending approvals.
+- **Audit log.** `audit_log` is append-only twice over: the app role has no UPDATE/DELETE grant, and a trigger
+  rejects both for every role. Actor ids are plain values (no foreign key), so deleting a user can't rewrite
+  history.
+- **Inbox.** Approval notices go out on the tenant notification channel; the WebSocket forwards them to
+  approvers, admins and the requester.
+- **Models without tool calling** (`LLM_TOOL_MODE=json`): the provider asks for a JSON decision constrained by a
+  schema (`response_format`), turning it into the same tool-call events.
+
 ## Known simplifications
 
 - One tenant per realm: `tenant` is a hard-coded claim (`acme`) on each client. Multi-tenant realms
@@ -100,3 +135,6 @@ question ─▶ run ─▶ retrieve (vector ∥ keyword → RRF, role filter in 
 - Object storage uses the MinIO root credentials locally; production would use a scoped access key.
 - Scanned PDFs (no text layer) fail with a clear message; there is no OCR.
 - No reranker yet: fusion output goes straight to the prompt.
+- Approvers may approve their own requests (the demo has one officer). A four-eyes rule would be a check in
+  `POST /api/approvals/{id}`.
+- In JSON tool mode answers arrive in one piece rather than streamed token by token.
