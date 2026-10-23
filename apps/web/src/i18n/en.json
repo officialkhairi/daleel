@@ -135,13 +135,13 @@
       "running": "Searching the documents…",
       "done": "Searched the documents",
       "propose": "Search the documents",
-      "summary": "Found {{passages}} passages in {{documents}} documents"
+      "summary": "Found $t(tools.count.passages, {\"count\": {{passages}} }) in $t(tools.count.documents, {\"count\": {{documents}} })"
     },
     "get_document": {
       "running": "Reading a document…",
       "done": "Read a document",
       "propose": "Read a document",
-      "summary": "Read {{passages}} passages of {{title}}"
+      "summary": "Read $t(tools.count.passages, {\"count\": {{passages}} }) of {{title}}"
     },
     "compare_clauses": {
       "running": "Comparing documents…",
@@ -172,6 +172,12 @@
       "done": "Flagged clause",
       "propose": "Flag a clause",
       "summary": "Flagged a clause in {{title}}"
+    },
+    "count": {
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "documents_one": "{{count}} document",
+      "documents_other": "{{count}} documents"
     }
   },
   "approvals": {

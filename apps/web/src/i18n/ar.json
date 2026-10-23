@@ -143,13 +143,13 @@
       "running": "جارٍ البحث في المستندات…",
       "done": "تم البحث في المستندات",
       "propose": "البحث في المستندات",
-      "summary": "وُجد {{passages}} مقطعًا في {{documents}} مستندات"
+      "summary": "عُثر على $t(tools.count.passages, {\"count\": {{passages}} }) في $t(tools.count.documents, {\"count\": {{documents}} })"
     },
     "get_document": {
       "running": "جارٍ قراءة مستند…",
       "done": "تمت قراءة مستند",
       "propose": "قراءة مستند",
-      "summary": "تمت قراءة {{passages}} مقاطع من {{title}}"
+      "summary": "تمت قراءة $t(tools.count.passages, {\"count\": {{passages}} }) من {{title}}"
     },
     "compare_clauses": {
       "running": "جارٍ مقارنة المستندات…",
@@ -180,6 +180,20 @@
       "done": "بند عليه علامة",
       "propose": "وضع علامة على بند",
       "summary": "وُضعت علامة على بند في {{title}}"
+    },
+    "count": {
+      "passages_zero": "أي مقطع",
+      "passages_one": "مقطع واحد",
+      "passages_two": "مقطعين",
+      "passages_few": "{{count}} مقاطع",
+      "passages_many": "{{count}} مقطعًا",
+      "passages_other": "{{count}} مقطع",
+      "documents_zero": "أي مستند",
+      "documents_one": "مستند واحد",
+      "documents_two": "مستندين",
+      "documents_few": "{{count}} مستندات",
+      "documents_many": "{{count}} مستندًا",
+      "documents_other": "{{count}} مستند"
     }
   },
   "approvals": {
