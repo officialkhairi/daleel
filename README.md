@@ -180,7 +180,7 @@ to the API with response buffering off (server-sent events) and long timeouts (t
 pod applies migrations before it starts; an advisory lock makes concurrent pods take turns.
 
 ```bash
-helm install daleel oci://ghcr.io/officialkhairi/charts/daleel --version 0.6.1 -f my-values.yaml
+helm install daleel oci://ghcr.io/officialkhairi/charts/daleel --version 0.6.2 -f my-values.yaml
 helm test daleel
 ```
 
@@ -191,8 +191,8 @@ provider; set them in `env` and `secretEnv` or point `existingSecret` at your ow
 with exactly that and runs `helm test` on every push.
 
 Pushing a `v*` tag runs [release.yml](.github/workflows/release.yml): images for the API, worker and web app go
-to GHCR (the release fails on fixable critical vulnerabilities found by Trivy, and the full report goes to code
-scanning), then the chart is published as an OCI artifact.
+to GHCR (the release fails on fixable critical vulnerabilities found by Trivy, and the full report is kept as a
+workflow artifact), then the chart is published as an OCI artifact.
 
 ## Choosing an embedding model
 

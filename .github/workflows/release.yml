@@ -9,7 +9,6 @@ on:
 permissions:
   contents: read
   packages: write
-  security-events: write
 
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
@@ -60,19 +59,20 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-      - name: Trivy report (high and critical) for code scanning
+      # Code scanning needs GitHub Advanced Security on private repositories, so the full
+      # report is kept as an artifact instead.
+      - name: Trivy report (high and critical)
         if: always()
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}:${{ steps.meta.outputs.version }}
           severity: HIGH,CRITICAL
-          format: sarif
-          output: trivy-${{ matrix.component }}.sarif
-      - uses: github/codeql-action/upload-sarif@v3
+          output: trivy-${{ matrix.component }}.txt
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: trivy-${{ matrix.component }}.sarif
-          category: trivy-${{ matrix.component }}
+          name: trivy-${{ matrix.component }}
+          path: trivy-${{ matrix.component }}.txt
 
   chart:
     needs: images
