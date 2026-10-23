@@ -40,6 +40,7 @@ spec:
           startupProbe:
             exec: { command: ["arq", "--check", "daleel_worker.main.WorkerSettings"] }
             periodSeconds: 15
+            timeoutSeconds: 10  # starting Python alone takes longer than the 1 s default
             failureThreshold: 60
           livenessProbe:
             exec: { command: ["arq", "--check", "daleel_worker.main.WorkerSettings"] }
