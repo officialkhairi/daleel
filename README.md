@@ -180,7 +180,7 @@ to the API with response buffering off (server-sent events) and long timeouts (t
 pod applies migrations before it starts; an advisory lock makes concurrent pods take turns.
 
 ```bash
-helm install daleel oci://ghcr.io/officialkhairi/charts/daleel --version 0.6.0 -f my-values.yaml
+helm install daleel oci://ghcr.io/officialkhairi/charts/daleel --version 0.6.1 -f my-values.yaml
 helm test daleel
 ```
 

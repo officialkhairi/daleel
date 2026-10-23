@@ -54,7 +54,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
       - name: Trivy (fails on fixable critical vulnerabilities)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}:${{ steps.meta.outputs.version }}
           severity: CRITICAL
@@ -62,7 +62,7 @@ jobs:
           exit-code: "1"
       - name: Trivy report (high and critical) for code scanning
         if: always()
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/daleel-${{ matrix.component }}:${{ steps.meta.outputs.version }}
           severity: HIGH,CRITICAL

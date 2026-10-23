@@ -2,7 +2,7 @@ apiVersion: v2
 name: daleel
 description: Bilingual (Arabic/English) enterprise document copilot with human-approved agent actions.
 type: application
-version: 0.6.0
-appVersion: "0.6.0"
+version: 0.6.1
+appVersion: "0.6.1"
 keywords: [rag, llm, arabic, fastapi, react]
 home: https://github.com/officialkhairi/daleel
