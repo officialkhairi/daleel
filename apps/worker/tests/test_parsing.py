@@ -29,6 +29,10 @@ def test_arabic_pdf_reads_in_logical_order() -> None:
         in texts
     )
     assert any("الإصدار 2.1" in t for t in texts)
+    # Chromium drops an alef written just before a lam-alef ligature from the text layer; the
+    # hole its glyph leaves brings it back.
+    assert "2. حدود صلاحيات الاعتماد" in headings
+    assert any("دون حد الاعتماد،" in t for t in texts)
 
 
 def test_pdf_blocks_carry_page_and_box() -> None:

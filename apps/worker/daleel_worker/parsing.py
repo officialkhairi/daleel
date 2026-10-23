@@ -79,6 +79,8 @@ def _line_text(line: dict[str, Any]) -> str:
     # A ligature glyph (e.g. lam-alef) yields several characters: the extra ones get a zero-width
     # box at the glyph's right edge and precede, in file order, the character holding the glyph's
     # box. Logically they follow it, so pair them up before ordering by position.
+    size = max((span["size"] for span in line["spans"]), default=10.0)
+    starts = sorted(c["bbox"][0] for c in chars if c["bbox"][2] - c["bbox"][0] >= 0.01)
     units: list[tuple[float, float, str]] = []  # (x0, x1, text)
     i = 0
     while i < len(chars):
@@ -87,6 +89,13 @@ def _line_text(line: dict[str, Any]) -> str:
         partner = chars[i + 1] if i + 1 < len(chars) else None
         if x1 - x0 < 0.01 and partner is not None and abs(partner["bbox"][2] - x0) < 0.5:
             units.append((partner["bbox"][0], x0, partner["c"] + char["c"]))
+            # Some generators (Chromium) also drop an alef written just before the ligature
+            # ("الاعتماد", "حالات") from the text: its glyph leaves an empty hole, about one alef
+            # wide, between the ligature and the next box to the right, where boxes otherwise touch.
+            right = next((s for s in starts if s > x0 - 0.5), None)
+            lam_alef = partner["c"] == "ل" and char["c"] in "اأإآ"
+            if lam_alef and right is not None and size * 0.12 < right - x0 < size * 0.4:
+                units.append((x0, right, "ا"))
             i += 2
             continue
         units.append((x0, x1, char["c"]))
@@ -94,7 +103,6 @@ def _line_text(line: dict[str, Any]) -> str:
 
     # The file's own spaces can't be trusted to sit between words either; like MuPDF does for
     # ordinary text, a space is wherever there is a visible gap between neighbours.
-    size = max((span["size"] for span in line["spans"]), default=10.0)
     letters = [u for u in units if not u[2].isspace() and not _ARABIC_MARK.fullmatch(u[2])]
     letters.sort(key=lambda u: -(u[0] + u[1]))
     parts: list[str] = []
