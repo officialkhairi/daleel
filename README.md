@@ -11,8 +11,8 @@ The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six ga
 | 2 | Streaming chat over SSE through a provider-agnostic `LLMProvider` | Done |
 | 3 | RAG ingestion, hybrid retrieval, citations, PDF highlight | Done |
 | 4 | Agent loop with human approvals, audit log | Done |
-| 5 | RBAC/ACL everywhere, admin console, observability, Storybook | Next |
-| 6 | Evals in CI, Helm, release, live demo | |
+| 5 | RBAC/ACL everywhere, admin console, observability, Storybook | Done |
+| 6 | Evals in CI, Helm, release, live demo | Next |
 
 ## Quick start
 
@@ -77,6 +77,34 @@ request, decision and execution is written to an append-only audit log (`GET /ap
 
 Try it: ask *"Draft a reminder to procurement about the approval thresholds"*, approve the card, and open Mailpit.
 
+## Administration and observability
+
+Admins get an **Admin** page: usage over the last 30 days (questions, failures, time to first word p50/p95,
+model tokens and cost, each chart also available as a table), everyone who has signed in with their roles, and
+the audit log. Editors change who can see each document from the Documents page; answers stop citing it for
+anyone who loses access immediately.
+
+`make obs` starts the stack with tracing and metrics:
+
+| Tool | URL | What you see |
+| --- | --- | --- |
+| Grafana (`admin` / `GRAFANA_ADMIN_PASSWORD`) | <http://localhost:3001> | Daleel dashboard: TTFT, traffic by route, tokens, cost, tool calls, approvals; traces in Tempo |
+| Langfuse (`admin@daleel.local` / `LANGFUSE_ADMIN_PASSWORD`) | <http://localhost:3000> | Every model call with its prompt, answer, tokens, per chat and user |
+| Prometheus | <http://localhost:9091> | Raw metrics (`daleel_*`) |
+
+One trace follows a question from the browser (fetch) through the API, retrieval, the database and Redis to the
+model server; the model call carries GenAI semantic-convention attributes, which is what Langfuse reads.
+
+### Access control and accessibility, tested
+
+- Every API operation rejects anonymous calls (the test walks the OpenAPI schema), and a role × endpoint matrix
+  pins down who may do what.
+- Every table with a `tenant_id` has forced row-level security and a policy (checked against the catalog).
+- Playwright runs axe on every page in English and Arabic (no serious or critical violations), and a
+  keyboard-only test asks a question, opens a citation and approves an email.
+- `packages/ui` has Storybook (`pnpm --filter @daleel/ui storybook`) with the accessibility addon failing stories
+  on violations.
+
 ### Choosing an embedding model
 
 | `EMBEDDINGS_PROVIDER` | What it does |
@@ -96,14 +124,29 @@ works.
 
 | Server | `LLM_BASE_URL` | `LLM_MODEL` | `LLM_API_KEY` |
 | --- | --- | --- | --- |
-| Ollama on your machine | `http://host.docker.internal:11434/v1` | `falcon3:3b` | empty |
-| Ollama in compose (`--profile local-llm`) | `http://ollama:11434/v1` | `falcon3:3b` | empty |
+| Ollama on your machine | `http://host.docker.internal:11434/v1` | `qwen2.5:3b` | empty |
+| Ollama in compose (`--profile local-llm`) | `http://ollama:11434/v1` | `qwen2.5:3b` | empty |
 | vLLM | `http://<host>:8000/v1` | the served model name | optional |
 | AI71 (hosted Falcon) | the base URL from your AI71 account | e.g. a Falcon model id | your key |
 | OpenAI | `https://api.openai.com/v1` | e.g. `gpt-4o-mini` | your key |
 
 Always also set `LLM_PROVIDER=openai_compat`. If the server rejects `stream_options`, set `LLM_STREAM_USAGE=false`.
 `LLM_PRICE_IN_PER_MTOK` / `LLM_PRICE_OUT_PER_MTOK` turn token counts into the cost shown in `usage` events.
+
+**On a Mac, run Ollama natively** (`brew install ollama && brew services start ollama`), not in compose:
+Docker on macOS has no GPU access, so the compose profile runs on the CPU and needs most of Docker's memory.
+Native Ollama uses the Apple GPU (Metal). Small models measured on an M1 (native Ollama, Daleel's agent prompts):
+
+| Model | Size | Native tool calls (approvals) | Grounded English | Arabic | Speed |
+| --- | --- | --- | --- | --- | --- |
+| `qwen2.5:3b` | 1.9 GB | yes, correct arguments | yes, cited | fluent, weaker when grounding | ~2–4 s per answer |
+| `granite4:3b` | 2.1 GB | yes | yes, cited | fluent, often uncited | ~1–2 s |
+| `qwen3:4b` | 2.5 GB | yes | yes, cited | yes, cited | 10–50 s (always reasons first) |
+| `falcon3:1b` | 1.8 GB | no (uses `LLM_TOOL_MODE=json`) | partly | weak | fast |
+
+`qwen2.5:3b` is the default recommendation: it proposes `send_email` / `create_ticket` with valid arguments, so
+the approval cards work end to end. Larger models (`qwen2.5:7b`, 4.7 GB) answer Arabic far better if you have
+the memory. Models without tool calling still work: the API falls back to `LLM_TOOL_MODE=json` on its own.
 
 ## Development
 
@@ -114,7 +157,8 @@ make dev-api   # API on :8000 with reload (runs migrations first)
 make dev-web   # Vite on :5173, proxies /api to :8000
 make lint      # ruff, mypy, eslint, tsc
 make test      # pytest (Testcontainers Postgres, Redis, MinIO) + vitest
-make e2e       # Playwright against the stack, with the fake LLM (then `make up` to restore .env)
+make e2e       # Playwright + axe against the stack, with the fake LLM (then `make up` to restore .env)
+make obs       # the stack plus OpenTelemetry, Tempo, Prometheus, Grafana and Langfuse
 make down      # stop; `make nuke` also deletes volumes
 ```
 
@@ -151,7 +195,7 @@ apps/worker      Arq jobs: parsing (PyMuPDF, python-docx), chunking, embeddings,
 apps/mock-ticketing  Stand-in for Jira/ServiceNow
 apps/web         React 19 + Vite SPA (features/chat, documents, citations, auth, profile)
 e2e              Playwright end-to-end tests
-packages/ui      Design tokens (Tailwind v4 theme)
+packages/ui      Design tokens, shared components, Storybook
 deploy/compose   docker-compose.yml, Keycloak realm, Postgres init
 docs             PLAN.md, ARCHITECTURE.md, adr/, demo/ (sample policies)
 ```
