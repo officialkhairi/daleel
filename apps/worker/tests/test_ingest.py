@@ -65,7 +65,7 @@ async def test_ingests_arabic_pdf_with_progress(deps: IngestDeps, tenant_id: uui
     assert (document.status, document.progress, document.error) == ("ready", 100, None)
     assert (document.lang, document.page_count, document.chunk_count) == ("ar", 2, len(chunks))
     assert len(chunks) >= 6
-    threshold = next(c for c in chunks if c.heading == "2. حدود صلاحيات لاعتماد")
+    threshold = next(c for c in chunks if c.heading == "2. حدود صلاحيات الاعتماد")
     assert "500,000 درهم" in threshold.text
     assert threshold.page == 1
     assert threshold.bboxes
