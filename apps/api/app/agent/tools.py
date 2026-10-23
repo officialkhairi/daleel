@@ -118,6 +118,14 @@ class _Args(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def search_summary(passages: int, documents: int) -> str:
+    return f"Found {plural(passages, 'passage')} in {plural(documents, 'document')}"
+
+
 def _split_list(value: Any) -> Any:
     """Small models often send one string where the schema asks for a list ("a@x.com" or
     "a@x.com, b@x.com"); accept that instead of failing the call."""
@@ -191,7 +199,7 @@ async def _search(ctx: ToolContext, args: SearchDocumentsArgs) -> ToolOutcome:
     documents = len({c.document_id for c in found})
     return ToolOutcome(
         content=SourcePool.render(numbered),
-        summary=f"Found {len(found)} passages in {documents} documents",
+        summary=search_summary(len(found), documents),
         data={"passages": len(found), "documents": documents},
     )
 
@@ -239,7 +247,7 @@ async def _get_document(ctx: ToolContext, args: GetDocumentArgs) -> ToolOutcome:
     numbered = ctx.sources.add(chunks)
     return ToolOutcome(
         content=SourcePool.render(numbered),
-        summary=f"Read {len(chunks)} passages of {document.title}",
+        summary=f"Read {plural(len(chunks), 'passage')} of {document.title}",
         data={"passages": len(chunks), "title": document.title},
     )
 

@@ -341,7 +341,7 @@ async def test_read_only_tools_run_without_approval(
     results = {d["call_id"]: d for _, n, d in events if n == "tool.result"}
     assert results["s1"]["ok"]
     assert results["g1"]["ok"]
-    assert results["g1"]["summary"] == "Read 1 passages of Procurement Policy"
+    assert results["g1"]["summary"] == "Read 1 passage of Procurement Policy"
     assert "approval.required" not in names(events)
     assert events[-1][2]["finish_reason"] == "stop"
     second_turn = provider.calls[1]
