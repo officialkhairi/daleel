@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, apiRequest } from "../../lib/api";
 import { useAccessToken } from "../auth/AuthProvider";
 import { chatKeys } from "./api";
+import type { ApprovalView } from "../approvals/types";
 import type { Citation } from "../citations/types";
 import { followRun, type RunEvent } from "./stream";
 
@@ -13,6 +14,15 @@ export interface RunError {
   retryable: boolean;
 }
 
+export interface ToolStep {
+  callId: string;
+  tool: string;
+  args: Record<string, unknown>;
+  summary?: string;
+  ok?: boolean;
+  data?: Record<string, unknown>;
+}
+
 export interface RunState {
   streaming: boolean;
   runId: string | null;
@@ -20,6 +30,8 @@ export interface RunState {
   question: string | null;
   draft: string;
   citations: Citation[];
+  steps: ToolStep[];
+  approvals: ApprovalView[];
   reconnecting: boolean;
   error: RunError | null;
 }
@@ -30,6 +42,8 @@ const IDLE: RunState = {
   question: null,
   draft: "",
   citations: [],
+  steps: [],
+  approvals: [],
   reconnecting: false,
   error: null,
 };
@@ -67,12 +81,17 @@ export function useChatRun(chatId: string | null) {
   useEffect(() => () => controller.current?.abort(), []);
 
   const run = useCallback(
-    async (id: string, open: (signal: AbortSignal) => Promise<Response>, question: string | null) => {
+    async (
+      id: string,
+      open: (signal: AbortSignal) => Promise<Response>,
+      question: string | null,
+      knownRunId?: string,
+    ) => {
       controller.current?.abort();
       const abort = new AbortController();
       controller.current = abort;
       streamChat.current = id;
-      setState({ ...IDLE, streaming: true, question });
+      setState({ ...IDLE, streaming: true, question, runId: knownRunId ?? null });
 
       const onEvent = (event: RunEvent) => {
         setState((s) => {
@@ -87,6 +106,37 @@ export function useChatRun(chatId: string | null) {
               if (s.citations.some((c) => c.n === citation.n)) return s;
               return { ...s, citations: [...s.citations, citation] };
             }
+            case "tool.started":
+              if (s.steps.some((step) => step.callId === event.call_id)) return s;
+              return { ...s, steps: [...s.steps, { callId: event.call_id, tool: event.tool, args: event.args }] };
+            case "tool.result": {
+              const done = { summary: event.summary, ok: event.ok, data: event.data };
+              // A resumed run reports approved calls without a fresh tool.started.
+              if (!s.steps.some((step) => step.callId === event.call_id)) {
+                return { ...s, steps: [...s.steps, { callId: event.call_id, tool: event.tool, args: {}, ...done }] };
+              }
+              return {
+                ...s,
+                steps: s.steps.map((step) => (step.callId === event.call_id ? { ...step, ...done } : step)),
+              };
+            }
+            case "approval.required":
+              if (s.approvals.some((a) => a.id === event.approval_id)) return s;
+              return {
+                ...s,
+                approvals: [
+                  ...s.approvals,
+                  {
+                    id: event.approval_id,
+                    tool: event.tool,
+                    args: event.args,
+                    json_schema: event.json_schema,
+                    risk: event.risk,
+                    status: "pending",
+                    expires_at: event.expires_at,
+                  },
+                ],
+              };
             case "error":
               return { ...s, error: { code: event.code, message: event.message, retryable: event.retryable } };
             default:
@@ -108,6 +158,7 @@ export function useChatRun(chatId: string | null) {
             setState((s) => ({ ...s, reconnecting: true }));
           },
           signal: abort.signal,
+          ...(knownRunId ? { runId: knownRunId } : {}),
         });
       } catch (error) {
         if (abort.signal.aborted) return;
@@ -163,6 +214,22 @@ export function useChatRun(chatId: string | null) {
     [run],
   );
 
+  /** Streams a run's continuation after its approvals were decided. */
+  const resumeAfterDecision = useCallback(
+    (id: string, runId: string, after: string | null) =>
+      run(
+        id,
+        (signal) =>
+          apiRequest(`/api/runs/${runId}/events`, tokenRef.current, {
+            headers: { ...SSE_HEADERS, ...(after ? { "Last-Event-ID": after } : {}) },
+            signal,
+          }),
+        null,
+        runId,
+      ),
+    [run],
+  );
+
   /** Asks the server to stop; the stream then ends with finish_reason "cancelled". */
   const stop = useCallback(async () => {
     if (!state.runId) {
@@ -178,5 +245,5 @@ export function useChatRun(chatId: string | null) {
     }
   }, [state.runId]);
 
-  return { state, send, retry, follow, stop };
+  return { state, send, retry, follow, resumeAfterDecision, stop };
 }

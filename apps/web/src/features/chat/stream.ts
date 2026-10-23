@@ -1,5 +1,6 @@
 import { ApiError } from "../../lib/api";
 import { readSse, type SseEvent } from "../../lib/sse";
+import type { JsonSchema, Risk } from "../approvals/types";
 import type { Citation } from "../citations/types";
 
 /** The SSE protocol from docs/PLAN.md. Every run ends with exactly one `run.completed`. */
@@ -8,10 +9,40 @@ export type RunEvent =
   | { type: "token"; text: string }
   | { type: "usage"; tokens_in: number; tokens_out: number; cost_usd: number }
   | ({ type: "citation" } & Citation)
+  | { type: "tool.started"; call_id: string; tool: string; args: Record<string, unknown> }
+  | {
+      type: "tool.result";
+      call_id: string;
+      tool: string;
+      summary: string;
+      ok: boolean;
+      duration_ms: number;
+      data: Record<string, unknown>;
+    }
+  | {
+      type: "approval.required";
+      approval_id: string;
+      call_id: string;
+      tool: string;
+      args: Record<string, unknown>;
+      json_schema: JsonSchema;
+      risk: Risk;
+      expires_at: string;
+    }
   | { type: "error"; code: string; message: string; retryable: boolean }
   | { type: "run.completed"; message_id: string | null; finish_reason: string };
 
-const KNOWN = new Set<RunEvent["type"]>(["run.started", "token", "citation", "usage", "error", "run.completed"]);
+const KNOWN = new Set<RunEvent["type"]>([
+  "run.started",
+  "token",
+  "citation",
+  "tool.started",
+  "tool.result",
+  "approval.required",
+  "usage",
+  "error",
+  "run.completed",
+]);
 
 function toRunEvent(sse: SseEvent): RunEvent | null {
   if (!KNOWN.has(sse.event as RunEvent["type"])) return null; // forward-compatible: skip unknown events
@@ -35,6 +66,8 @@ export interface FollowOptions {
   /** Called before each reconnect attempt (1-based). */
   onReconnect?: (attempt: number) => void;
   signal: AbortSignal;
+  /** Known up front when following a run that is already under way (e.g. after an approval). */
+  runId?: string;
   maxReconnects?: number;
   wait?: (attempt: number, signal: AbortSignal) => Promise<void>;
 }
@@ -58,7 +91,7 @@ function backoff(attempt: number, signal: AbortSignal): Promise<void> {
  * connection drops. HTTP errors (ApiError) and aborts are not retried. */
 export async function followRun(options: FollowOptions): Promise<void> {
   const { open, resume, onEvent, onReconnect, signal, maxReconnects = 5, wait = backoff } = options;
-  let runId: string | undefined;
+  let runId: string | undefined = options.runId;
   let lastEventId: string | undefined;
   let attempt = 0;
   let connect: () => Promise<Response> = open;

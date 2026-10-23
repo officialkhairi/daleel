@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 
 import { useMe } from "../profile/useMe";
 import { ROLES, useDeleteDocument, useDocuments, useUpload, type DocumentInfo, type Role } from "./api";
-import { useDocumentProgress } from "./useDocumentProgress";
 
 const ACCEPT = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -228,7 +227,6 @@ export function DocumentsPage() {
   const { t, i18n } = useTranslation();
   const me = useMe();
   const documents = useDocuments();
-  useDocumentProgress();
   const canEdit = me.data?.roles.some((r) => r === "editor" || r === "admin") ?? false;
 
   return (

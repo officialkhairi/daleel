@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
+import { approvalKeys } from "../approvals/api";
 import { useAccessToken } from "../auth/AuthProvider";
-import { documentKeys, type DocumentInfo } from "./api";
+import { chatKeys } from "../chat/api";
+import { documentKeys, type DocumentInfo } from "../documents/api";
 
 interface ProgressEvent {
   type: "document.progress";
@@ -15,14 +17,22 @@ interface ProgressEvent {
   page_count: number | null;
 }
 
-function socketUrl(): string {
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.host}/api/ws/documents`;
+interface ApprovalNotice {
+  type: "approval.created" | "approval.decided";
+  approval_id: string;
+  chat_id: string;
+  status: string;
 }
 
-/** Keeps the documents list live while ingestion runs. The token goes in the first message, not
- * the URL. Reconnects with backoff; the server closes the socket when the token expires. */
-export function useDocumentProgress(): void {
+function socketUrl(): string {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${scheme}://${window.location.host}/api/ws`;
+}
+
+/** One socket for the whole app: keeps the documents list and the approval inbox live. The token
+ * goes in the first message, not the URL. Reconnects with backoff; the server closes the socket
+ * when the token expires. */
+export function useNotifications(): void {
   const token = useAccessToken();
   const tokenRef = useRef(token);
   const queryClient = useQueryClient();
@@ -37,7 +47,7 @@ export function useDocumentProgress(): void {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
 
-    const apply = (event: ProgressEvent) => {
+    const progress = (event: ProgressEvent) => {
       const seen = { known: false };
       queryClient.setQueryData<DocumentInfo[]>(documentKeys.list, (list) =>
         list?.map((d) => {
@@ -57,6 +67,11 @@ export function useDocumentProgress(): void {
       if (!seen.known || event.status === "ready") void queryClient.invalidateQueries({ queryKey: documentKeys.list });
     };
 
+    const approval = (event: ApprovalNotice) => {
+      void queryClient.invalidateQueries({ queryKey: approvalKeys.pending });
+      void queryClient.invalidateQueries({ queryKey: chatKeys.detail(event.chat_id) });
+    };
+
     const connect = () => {
       socket = new WebSocket(socketUrl());
       socket.onopen = () => {
@@ -65,7 +80,8 @@ export function useDocumentProgress(): void {
       socket.onmessage = (message: MessageEvent<string>) => {
         const data = JSON.parse(message.data) as { type: string };
         if (data.type === "ready") attempt = 0;
-        if (data.type === "document.progress") apply(data as ProgressEvent);
+        else if (data.type === "document.progress") progress(data as ProgressEvent);
+        else if (data.type.startsWith("approval.")) approval(data as ApprovalNotice);
       };
       socket.onclose = () => {
         if (stopped) return;

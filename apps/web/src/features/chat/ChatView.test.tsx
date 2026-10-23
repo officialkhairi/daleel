@@ -12,6 +12,8 @@ const idle: RunState = {
   question: null,
   draft: "",
   citations: [],
+  steps: [],
+  approvals: [],
   reconnecting: false,
   error: null,
 };

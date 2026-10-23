@@ -4,7 +4,9 @@ import { useTranslation } from "react-i18next";
 
 import { apiPost } from "../../lib/api";
 import { useAccessToken } from "../auth/AuthProvider";
+import type { ApprovalView, DecisionOut } from "../approvals/types";
 import { CitationPanel } from "../citations/CitationPanel";
+import { useMe } from "../profile/useMe";
 import type { Citation } from "../citations/types";
 import { chatKeys, useChat, useChats, type ChatSummary } from "./api";
 import { ChatView } from "./ChatView";
@@ -55,7 +57,13 @@ export function ChatPage() {
   const queryClient = useQueryClient();
   const [chatId, select] = useSelectedChat();
   const chat = useChat(chatId);
-  const { state, send, retry, follow, stop } = useChatRun(chatId);
+  const { state, send, retry, follow, resumeAfterDecision, stop } = useChatRun(chatId);
+  const me = useMe();
+  const canDecide = me.data?.roles.some((r) => r === "approver" || r === "admin") ?? false;
+  const approvals = new Map<string, ApprovalView>((chat.data?.approvals ?? []).map((a) => [a.id, a]));
+  const onDecided = (result: DecisionOut) => {
+    if (chatId && result.resumed) void resumeAfterDecision(chatId, result.run_id, result.resume_from);
+  };
   // Remembered per chat, so switching chats closes the panel without an effect.
   const [opened, setOpened] = useState<{ chatId: string | null; citation: Citation } | null>(null);
   const openCitation = opened?.chatId === chatId ? opened.citation : null;
@@ -102,6 +110,9 @@ export function ChatPage() {
               if (chatId) void retry(chatId);
             }}
             onCite={setOpenCitation}
+            approvals={approvals}
+            canDecide={canDecide}
+            onDecided={onDecided}
           />
         )}
       </main>

@@ -10,8 +10,7 @@ test("an answer cites the document and the citation opens the exact passage", as
   await box.fill("How long must passwords be?");
   await box.press("Enter");
 
-  const answer = page.getByRole("list", { name: "Conversation" }).getByRole("listitem").last();
-  const chip = answer.getByRole("button", { name: /^Source 1: / });
+  const chip = page.getByRole("list", { name: "Conversation" }).getByRole("button", { name: /^Source 1: / }).last();
   await expect(chip).toBeVisible();
   await expect(page.locator("[aria-busy=true]")).toHaveCount(0);
 
