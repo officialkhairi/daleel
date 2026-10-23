@@ -62,6 +62,10 @@ class RunBus:
                 if fields["event"] == TERMINAL_EVENT:
                     return
 
+    async def last_event_id(self, run_id: uuid.UUID) -> str | None:
+        entries = await self._redis.xrevrange(self._events_key(run_id), count=1)
+        return str(entries[0][0]) if entries else None
+
     async def has_events(self, run_id: uuid.UUID) -> bool:
         return bool(await self._redis.exists(self._events_key(run_id)))
 

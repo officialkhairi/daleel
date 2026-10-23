@@ -293,3 +293,75 @@ async def test_bus_heartbeats_while_idle_and_stops_when_gone(bus: RunBus) -> Non
     await bus._redis.delete(f"run:{run_id}:events")
     with pytest.raises(StopAsyncIteration):
         await anext(reader)
+
+
+async def json_mode(
+    content: str, messages: list[ChatMessage] | None = None
+) -> tuple[list[LLMEvent], dict[str, Any]]:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": content}}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 9},
+            },
+        )
+
+    tool = ToolSpec(name="send_email", description="Send", parameters={"type": "object"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        provider = OpenAICompatProvider(
+            base_url=BASE, model="falcon3:1b", api_key="", http=http, timeout=5, tool_mode="json"
+        )
+        events = [
+            e
+            async for e in provider.stream(
+                messages or [ChatMessage(role="system", content="Be brief."), *USER], [tool]
+            )
+        ]
+    return events, json.loads(seen[0].content)
+
+
+async def test_json_mode_turns_a_decision_into_a_tool_call() -> None:
+    events, body = await json_mode('{"action": "send_email", "arguments": {"to": ["a@b.c"]}}')
+    assert isinstance(events[1], ToolCallDone)
+    assert (events[1].name, events[1].args) == ("send_email", {"to": ["a@b.c"]})
+    assert events[0] == Usage(tokens_in=50, tokens_out=9)
+    assert events[-1] == Finish(reason="tool_calls")
+    assert body["stream"] is False
+    schema = body["response_format"]["json_schema"]["schema"]
+    assert schema["properties"]["action"]["enum"] == ["answer", "send_email"]
+    assert body["messages"][0]["content"].startswith("Be brief.\n\nReply with a JSON object only.")
+
+
+async def test_json_mode_answers_word_by_word() -> None:
+    events, _ = await json_mode('{"action": "answer", "answer": "Fifty thousand AED."}')
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Fifty", " thousand", " AED."]
+    assert events[-1] == Finish(reason="stop")
+
+
+async def test_json_mode_rejects_non_json() -> None:
+    with pytest.raises(LLMError) as exc:
+        await json_mode("I think you should email them")
+    assert exc.value.code == "llm_bad_response"
+
+
+async def test_json_mode_flattens_tool_turns() -> None:
+    call = ToolCallDone(call_id="c1", name="send_email", args={"to": ["a@b.c"]})
+    _, body = await json_mode(
+        '{"action": "answer", "answer": "Done."}',
+        [
+            ChatMessage(role="user", content="email them"),
+            ChatMessage(role="assistant", content="Drafted.", tool_calls=[call]),
+            ChatMessage(role="tool", content="The email was sent.", tool_call_id="c1"),
+        ],
+    )
+    roles = [m["role"] for m in body["messages"]]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert (
+        body["messages"][2]["content"]
+        == 'Drafted.\n[{"action": "send_email", "arguments": {"to": ["a@b.c"]}}]'
+    )
+    assert body["messages"][3]["content"] == "Tool result (c1):\nThe email was sent."

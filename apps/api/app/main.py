@@ -7,7 +7,8 @@ from arq.connections import RedisSettings
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from app.api import admin, chats, documents, health, me, runs, ws
+from app.agent.effects import Mailer, Ticketing
+from app.api import admin, approvals, audit, chats, documents, health, me, runs, ws
 from app.auth.jwks import JWKSCache, TokenVerifier
 from app.chat.tasks import TaskRegistry
 from app.config import Settings, get_settings
@@ -50,6 +51,14 @@ def create_app(
         app.state.arq = arq
         app.state.store = store or ObjectStore.from_settings(settings)
         app.state.embedder = build_query_embedder(settings, http, arq)
+        app.state.mailer = Mailer(
+            host=settings.smtp_host, port=settings.smtp_port, sender=settings.smtp_from
+        )
+        app.state.ticketing = Ticketing(
+            base_url=settings.ticketing_url,
+            token=settings.ticketing_token.get_secret_value(),
+            http=http,
+        )
         app.state.engine = engine
         app.state.bus = RunBus(redis, ttl_seconds=settings.run_events_ttl_seconds)
         app.state.provider = provider or build_provider(settings, http)
@@ -87,4 +96,6 @@ def create_app(
     app.include_router(runs.router)
     app.include_router(documents.router)
     app.include_router(ws.router)
+    app.include_router(approvals.router)
+    app.include_router(audit.router)
     return app

@@ -1,5 +1,6 @@
-"""Ingestion progress: the worker publishes on a per-tenant Redis channel, the API relays it to
-browsers over WebSocket (filtered by each viewer's roles)."""
+"""Tenant notifications: ingestion progress (from the worker) and approval updates (from the API)
+go out on one Redis channel per tenant; the API relays them to browsers over WebSocket, filtered
+by what each viewer may see."""
 
 import uuid
 from typing import Literal
@@ -23,9 +24,21 @@ class ProgressEvent(BaseModel):
     page_count: int | None = None
 
 
+class ApprovalNotice(BaseModel):
+    """Sent to approvers (and the requester) when an approval is created or decided."""
+
+    type: Literal["approval.created", "approval.decided"]
+    approval_id: uuid.UUID
+    run_id: uuid.UUID
+    chat_id: uuid.UUID
+    tool: str
+    status: Literal["pending", "approved", "rejected", "expired"]
+    requested_by: uuid.UUID | None
+
+
 def channel(tenant_id: uuid.UUID) -> str:
-    return f"tenant:{tenant_id}:documents"
+    return f"tenant:{tenant_id}:events"
 
 
-async def publish(redis: Redis, tenant_id: uuid.UUID, event: ProgressEvent) -> None:
+async def publish(redis: Redis, tenant_id: uuid.UUID, event: BaseModel) -> None:
     await redis.publish(channel(tenant_id), event.model_dump_json())

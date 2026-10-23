@@ -1,0 +1,21 @@
+[project]
+name = "daleel-mock-ticketing"
+version = "0.1.0"
+description = "A stand-in for Jira/ServiceNow: create and list tickets"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.161.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]

@@ -4,10 +4,11 @@ import uuid
 from typing import Any, ClassVar
 
 import httpx
-from arq import func
+from arq import cron, func
 from arq.connections import RedisSettings
 from redis.asyncio import Redis
 
+from app.agent.expiry import expire_stale_approvals
 from app.config import get_settings
 from app.db.session import make_engine, make_sessionmaker
 from app.embeddings.base import EmbedKind
@@ -53,6 +54,11 @@ async def ingest_document(ctx: Ctx, document_id: str, tenant_id: str) -> None:
     await run_ingest(ctx["deps"], uuid.UUID(document_id), uuid.UUID(tenant_id))
 
 
+async def expire_approvals(ctx: Ctx) -> int:
+    deps: IngestDeps = ctx["deps"]
+    return await expire_stale_approvals(deps.sessions, ctx["redis_pub"])
+
+
 async def embed_texts(ctx: Ctx, texts: list[str], kind: EmbedKind) -> list[list[float]]:
     deps: IngestDeps = ctx["deps"]
     vectors: list[list[float]] = await deps.embedder.embed(texts, kind=kind)
@@ -65,6 +71,7 @@ class WorkerSettings:
         # Query embeddings are awaited by the API; keep results only briefly.
         func(embed_texts, name=EMBED_TEXTS, max_tries=1, timeout=60, keep_result=60),
     ]
+    cron_jobs: ClassVar = [cron(expire_approvals, minute=set(range(0, 60, 5)), run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

@@ -137,6 +137,15 @@ services:
       LLM_PRICE_IN_PER_MTOK: ${LLM_PRICE_IN_PER_MTOK}
       LLM_PRICE_OUT_PER_MTOK: ${LLM_PRICE_OUT_PER_MTOK}
       LLM_FAKE_DELAY_MS: ${LLM_FAKE_DELAY_MS}
+      LLM_TOOL_MODE: ${LLM_TOOL_MODE}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS}
+      APPROVAL_TTL_HOURS: ${APPROVAL_TTL_HOURS}
+      # Side effects (only after a person approves them).
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: ${SMTP_FROM}
+      TICKETING_URL: http://mock-ticketing:8090
+      TICKETING_TOKEN: ${TICKETING_TOKEN}
       <<: [*storage-env, *embeddings-env]
       LOG_LEVEL: ${LOG_LEVEL}
     # Lets LLM_BASE_URL point at a model server on the host (e.g. Ollama on macOS).
@@ -152,6 +161,10 @@ services:
       keycloak:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      mock-ticketing:
         condition: service_healthy
 
   worker:
@@ -185,6 +198,22 @@ services:
       # The first start may download the embedding model (~2.3 GB).
       start_period: 900s
       test: ["CMD", "arq", "--check", "daleel_worker.main.WorkerSettings"]
+
+  # Stand-in for Jira/ServiceNow; tickets at http://localhost:8090
+  mock-ticketing:
+    build: ../../apps/mock-ticketing
+    image: daleel-mock-ticketing:dev
+    environment:
+      TICKETING_TOKEN: ${TICKETING_TOKEN}
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      <<: *healthcheck
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz')"
 
   web:
     build:

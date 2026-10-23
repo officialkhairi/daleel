@@ -15,6 +15,7 @@ def build_provider(settings: Settings, http: httpx.AsyncClient) -> LLMProvider:
             http=http,
             timeout=settings.llm_timeout_seconds,
             stream_usage=settings.llm_stream_usage,
+            tool_mode=settings.llm_tool_mode,
         )
     delay = settings.llm_fake_delay_ms / 1000
     if settings.llm_fake_script:

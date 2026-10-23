@@ -64,6 +64,22 @@ class Settings(BaseSettings):
     # How long the API waits for the worker to embed a query.
     embeddings_query_timeout_seconds: float = 15.0
 
+    # Agent: tool-using steps per run, and whether to search the documents for the question
+    # before the first step (robust with small models; shown as a search_documents call).
+    agent_max_steps: int = 6
+    agent_prefetch: bool = True
+    # "native" uses the model's tool calling; "json" asks for a JSON decision constrained by a
+    # schema (response_format), for models without tool support.
+    llm_tool_mode: Literal["native", "json"] = "native"
+    approval_ttl_hours: int = 24
+
+    # Side effects that only ever run after a human approves them.
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "Daleel <daleel@acme.example>"
+    ticketing_url: str = "http://localhost:8090"
+    ticketing_token: SecretStr = SecretStr("")
+
     # Retrieval: candidates per method before fusion, results kept after it.
     retrieval_candidates: int = 20
     retrieval_top_k: int = 6

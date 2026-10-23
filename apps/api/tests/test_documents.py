@@ -46,7 +46,7 @@ async def test_upload_stores_queues_and_announces(
 ) -> None:
     editor = auth(make_token, ["editor"])
     pubsub = app.state.redis.pubsub()
-    await pubsub.subscribe(f"tenant:{tenant_id_for('acme')}:documents")
+    await pubsub.subscribe(f"tenant:{tenant_id_for('acme')}:events")
     await pubsub.get_message(timeout=1)  # subscribe confirmation
 
     data = unique_pdf()
@@ -189,7 +189,7 @@ def test_websocket_requires_auth_then_relays_visible_progress(
 
     app = create_app(settings, http_client=httpx.AsyncClient(transport=jwks_transport))
     redis = SyncRedis.from_url(settings.redis_url)
-    channel = f"tenant:{tenant_id_for('acme')}:documents"
+    channel = f"tenant:{tenant_id_for('acme')}:events"
 
     def event(acl: list[str]) -> str:
         return json.dumps(
@@ -210,7 +210,7 @@ def test_websocket_requires_auth_then_relays_visible_progress(
                 ws.receive_json()
             assert closed.value.code == 1008
 
-        with client.websocket_connect("/api/ws/documents") as ws:
+        with client.websocket_connect("/api/ws") as ws:
             ws.send_json({"type": "auth", "token": make_token(roles=["viewer"])})
             assert ws.receive_json() == {"type": "ready"}
             redis.publish(channel, event(["approver", "admin"]))  # not for viewers

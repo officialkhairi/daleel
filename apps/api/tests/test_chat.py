@@ -84,9 +84,15 @@ async def test_streams_answer_and_persists_it(
     chat_id = await new_chat(client, headers)
     events = await send(client, headers, chat_id, "Hello there")
 
-    assert names(events)[0] == "run.started"
+    # Every run first searches the documents for the question, as a visible tool call.
+    assert names(events)[:3] == ["run.started", "tool.started", "tool.result"]
+    assert events[1][2] == {
+        "call_id": "prefetch",
+        "tool": "search_documents",
+        "args": {"query": "Hello there"},
+    }
     assert names(events)[-2:] == ["usage", "run.completed"]
-    assert set(names(events)[1:-2]) == {"token"}
+    assert set(names(events)[3:-2]) == {"token"}
     assert text_of(events) == "You said: Hello there"
     assert all(event_id for event_id, _, _ in events)
     completed = events[-1][2]
@@ -139,9 +145,9 @@ async def test_provider_error_before_any_text(
     chat_id = await new_chat(client, headers)
     events = await send(client, headers, chat_id, "hi")
 
-    assert names(events) == ["run.started", "error", "run.completed"]
-    assert events[1][2] == {"code": "llm_unavailable", "message": "down", "retryable": True}
-    assert events[2][2] == {"message_id": None, "finish_reason": "error"}
+    assert names(events) == ["run.started", "tool.started", "tool.result", "error", "run.completed"]
+    assert events[3][2] == {"code": "llm_unavailable", "message": "down", "retryable": True}
+    assert events[4][2] == {"message_id": None, "finish_reason": "error"}
     detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
     assert [m["role"] for m in detail["messages"]] == ["user"]
 
@@ -153,7 +159,14 @@ async def test_error_mid_stream_keeps_partial_answer(
     chat_id = await new_chat(client, headers)
     events = await send(client, headers, chat_id, "hi")
 
-    assert names(events) == ["run.started", "token", "error", "run.completed"]
+    assert names(events) == [
+        "run.started",
+        "tool.started",
+        "tool.result",
+        "token",
+        "error",
+        "run.completed",
+    ]
     detail = (await client.get(f"/api/chats/{chat_id}", headers=headers)).json()
     assert (detail["messages"][1]["content"], detail["messages"][1]["status"]) == (
         "Partial ",

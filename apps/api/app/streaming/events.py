@@ -2,7 +2,8 @@
 an `error` event, when present, comes right before it."""
 
 import uuid
-from typing import ClassVar
+from datetime import datetime
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -43,6 +44,36 @@ class Citation(StreamEvent):
     snippet: str
 
 
+class ToolStarted(StreamEvent):
+    name: ClassVar[str] = "tool.started"
+    call_id: str
+    tool: str
+    args: dict[str, Any]
+
+
+class ToolResult(StreamEvent):
+    name: ClassVar[str] = "tool.result"
+    call_id: str
+    tool: str
+    summary: str
+    ok: bool
+    duration_ms: int
+    data: dict[str, Any] = {}
+
+
+class ApprovalRequired(StreamEvent):
+    """The run pauses here until a person decides (POST /api/approvals/{approval_id})."""
+
+    name: ClassVar[str] = "approval.required"
+    approval_id: uuid.UUID
+    call_id: str
+    tool: str
+    args: dict[str, Any]
+    json_schema: dict[str, Any]
+    risk: str
+    expires_at: datetime
+
+
 class ErrorEvent(StreamEvent):
     name: ClassVar[str] = "error"
     code: str
@@ -53,7 +84,9 @@ class ErrorEvent(StreamEvent):
 class RunCompleted(StreamEvent):
     name: ClassVar[str] = "run.completed"
     message_id: uuid.UUID | None
-    finish_reason: str  # stop | length | cancelled | error
+    # stop | length | cancelled | error | awaiting_approval (the run resumes on this same stream
+    # after the decision, ending with another run.completed)
+    finish_reason: str
 
 
 TERMINAL_EVENT = RunCompleted.name
