@@ -10,11 +10,12 @@ from typing import Annotated, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent import audit
 from app.api.chats import any_role
 from app.auth.deps import require
 from app.auth.principal import Principal
@@ -54,6 +55,13 @@ class DuplicateDocument(AppError):
 class BadRoles(AppError):
     status_code = 422
     code = "validation_error"
+
+
+class DocumentUpdate(BaseModel):
+    title: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    acl_roles: list[str] | None = Field(
+        default=None, description="Who can see it; admins are always added."
+    )
 
 
 class DocumentOut(BaseModel):
@@ -145,6 +153,16 @@ async def upload(
             session.add(document)
             await session.flush()
             await session.refresh(document)
+            await audit.record(
+                session,
+                tenant_id=principal.tenant_id,
+                actor_id=user_id,
+                actor=principal.username,
+                action="document.uploaded",
+                target_type="document",
+                target_id=document.id,
+                details={"title": document.title, "acl_roles": roles, "sha256": document.sha256},
+            )
             out = DocumentOut.model_validate(document)
     except IntegrityError as exc:
         await state.store.delete(key)
@@ -206,13 +224,59 @@ async def download(
     )
 
 
+@router.patch("/{document_id}")
+async def update(
+    document_id: uuid.UUID,
+    body: DocumentUpdate,
+    request: Request,
+    principal: Principal = Depends(editor_role),
+) -> DocumentOut:
+    """Renames a document or changes who can see it (answers stop citing it at once)."""
+    async with tenant_session(request.app.state.sessions, principal.tenant_id) as session:
+        user_id = await chat_repo.ensure_user_id(session, principal)
+        document = await _visible(session, document_id, list(principal.roles))
+        before = {"title": document.title, "acl_roles": list(document.acl_roles)}
+        if body.title is not None:
+            document.title = body.title.strip()
+        if body.acl_roles is not None:
+            document.acl_roles = _acl(body.acl_roles)
+        document.updated_at = func.now()
+        await audit.record(
+            session,
+            tenant_id=principal.tenant_id,
+            actor_id=user_id,
+            actor=principal.username,
+            action="document.updated",
+            target_type="document",
+            target_id=document.id,
+            details={
+                "before": before,
+                "after": {"title": document.title, "acl_roles": list(document.acl_roles)},
+            },
+        )
+        await session.flush()
+        await session.refresh(document)
+        return DocumentOut.model_validate(document)
+
+
 @router.delete("/{document_id}", status_code=204)
 async def delete(
     document_id: uuid.UUID, request: Request, principal: Principal = Depends(editor_role)
 ) -> Response:
     async with tenant_session(request.app.state.sessions, principal.tenant_id) as session:
+        user_id = await chat_repo.ensure_user_id(session, principal)
         document = await _visible(session, document_id, list(principal.roles))
         key = document.s3_key
+        await audit.record(
+            session,
+            tenant_id=principal.tenant_id,
+            actor_id=user_id,
+            actor=principal.username,
+            action="document.deleted",
+            target_type="document",
+            target_id=document.id,
+            details={"title": document.title},
+        )
         await session.delete(document)
     await request.app.state.store.delete(key)
     return Response(status_code=204)

@@ -5,6 +5,8 @@ import httpx
 from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from redis.asyncio import Redis
 
 from app.agent.effects import Mailer, Ticketing
@@ -18,6 +20,7 @@ from app.errors import ErrorEnvelope, install_error_handlers
 from app.llm.base import LLMProvider
 from app.llm.factory import build_provider
 from app.observability.logging import RequestIdMiddleware, configure_logging
+from app.observability.tracing import configure_tracing, instrument_app, instrument_engine
 from app.storage import ObjectStore
 from app.streaming.bus import RunBus
 
@@ -32,11 +35,14 @@ def create_app(
     """Tests inject `http_client` (JWKS from an in-process transport), `provider` and `store`."""
     settings = settings or get_settings()
     configure_logging(settings.log_level)
+    tracing = configure_tracing(settings.otel_exporter_otlp_endpoint, settings.otel_service_name)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         http = http_client or httpx.AsyncClient()
         engine = make_engine(settings.database_url)
+        if tracing:
+            instrument_engine(engine)
         jwks = JWKSCache(
             settings.oidc_jwks_url,
             http,
@@ -89,6 +95,8 @@ def create_app(
     )
     install_error_handlers(app)
     app.add_middleware(RequestIdMiddleware)
+    if tracing:
+        instrument_app(app)
     app.include_router(health.router)
     app.include_router(me.router)
     app.include_router(admin.router)
@@ -98,4 +106,9 @@ def create_app(
     app.include_router(ws.router)
     app.include_router(approvals.router)
     app.include_router(audit.router)
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
     return app

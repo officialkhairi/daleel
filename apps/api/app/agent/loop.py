@@ -10,6 +10,7 @@ Runs outlive the HTTP requests that start them, so clients can drop and resume (
 or cancel from another request."""
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -49,6 +50,16 @@ from app.llm.base import (
     ToolCallDone,
     Usage,
 )
+from app.observability.metrics import (
+    CITATIONS_DROPPED,
+    LLM_COST,
+    LLM_TOKENS,
+    RETRIEVAL_SECONDS,
+    RUN_TTFT,
+    RUNS,
+    TOOL_CALLS,
+)
+from app.observability.tracing import tracer
 from app.rag.citations import CitationFilter
 from app.rag.prompt import sources_prompt
 from app.rag.retrieve import RetrievedChunk
@@ -194,8 +205,13 @@ class _Segment:
         messages: list[ChatMessage],
         pool: SourcePool,
         step: int,
+        *,
+        resumed: bool = False,
     ) -> None:
         self.spec = spec
+        self.resumed = resumed
+        self.started = time.perf_counter()
+        self.first_token_at: float | None = None
         self.deps = deps
         self.messages = messages
         self.pool = pool
@@ -231,6 +247,8 @@ class _Segment:
 
     async def emit(self, text: str, new: list[int]) -> None:
         if text:
+            if self.first_token_at is None:
+                self.first_token_at = time.perf_counter()
             self.parts.append(text)
             await self.publish(Token(text=text))
         for n in new:
@@ -251,24 +269,56 @@ class _Segment:
         specs = [t.spec() for t in tools_for(self.roles)]
         start = len(self.parts)
         calls: list[ToolCallDone] = []
-        async for event in self.deps.provider.stream(self.messages, specs, model=self.spec.model):
-            if await self.cancelled():
-                self.finish = "cancelled"
-                return None
-            if isinstance(event, TextDelta):
-                await self.emit(*self.filter.feed(event.text))
-            elif isinstance(event, ToolCallDone):
-                calls.append(event)
-            elif isinstance(event, Usage):
-                self.saw_usage = True
-                self.usage = Usage(
-                    tokens_in=self.usage.tokens_in + event.tokens_in,
-                    tokens_out=self.usage.tokens_out + event.tokens_out,
+        # One span per model call, with GenAI semantic-convention attributes (Langfuse and Tempo
+        # read them). The HTTP call to the model server nests under it.
+        with tracer.start_as_current_span(f"chat {self.spec.model}") as span:
+            if span.is_recording():
+                span.set_attributes(
+                    {
+                        "gen_ai.operation.name": "chat",
+                        "gen_ai.request.model": self.spec.model,
+                        "langfuse.session.id": str(self.spec.chat_id),
+                        "langfuse.user.id": str(self.spec.user_id),
+                        "langfuse.observation.type": "generation",
+                        "langfuse.observation.input": json.dumps(
+                            [m.model_dump(mode="json") for m in self.messages], ensure_ascii=False
+                        ),
+                    }
                 )
-            elif isinstance(event, Finish):
-                self.finish = "stop" if event.reason == "tool_calls" else event.reason
-        await self.emit(*self.filter.flush())
-        return "".join(self.parts[start:]), calls
+            usage_before = self.usage
+            async for event in self.deps.provider.stream(
+                self.messages, specs, model=self.spec.model
+            ):
+                if await self.cancelled():
+                    self.finish = "cancelled"
+                    return None
+                if isinstance(event, TextDelta):
+                    await self.emit(*self.filter.feed(event.text))
+                elif isinstance(event, ToolCallDone):
+                    calls.append(event)
+                elif isinstance(event, Usage):
+                    self.saw_usage = True
+                    self.usage = Usage(
+                        tokens_in=self.usage.tokens_in + event.tokens_in,
+                        tokens_out=self.usage.tokens_out + event.tokens_out,
+                    )
+                elif isinstance(event, Finish):
+                    self.finish = "stop" if event.reason == "tool_calls" else event.reason
+            await self.emit(*self.filter.flush())
+            text = "".join(self.parts[start:])
+            if span.is_recording():
+                span.set_attributes(
+                    {
+                        "gen_ai.usage.input_tokens": self.usage.tokens_in - usage_before.tokens_in,
+                        "gen_ai.usage.output_tokens": self.usage.tokens_out
+                        - usage_before.tokens_out,
+                        "langfuse.observation.output": json.dumps(
+                            {"text": text, "tool_calls": [c.model_dump() for c in calls]},
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+        return text, calls
 
     async def run_auto(self, invocation: Invocation) -> None:
         tool, args = invocation.ready()
@@ -284,6 +334,7 @@ class _Segment:
         for call in self.calls:
             if call["call_id"] == call_id:
                 call.update(summary=outcome.summary, ok=outcome.ok, data=outcome.data)
+        TOOL_CALLS.labels(tool or "unknown", "ok" if outcome.ok else "failed").inc()
         await self.publish(
             ToolResult(
                 call_id=call_id,
@@ -355,7 +406,8 @@ async def _first_segment(segment: _Segment) -> list[Invocation]:
             )
         )
         started = time.perf_counter()
-        found = await deps.retriever(spec.question)
+        with RETRIEVAL_SECONDS.time(), tracer.start_as_current_span("retrieve"):
+            found = await deps.retriever(spec.question)
         segment.pool.add(found)
         documents = len({c.document_id for c in found})
         segment.calls.append(
@@ -401,7 +453,7 @@ async def resume_run(run_id: uuid.UUID, tenant_id: uuid.UUID, deps: AgentDeps) -
     spec = RunSpec.load(run)
     pool = SourcePool.load(run.state.get("sources", []))
     messages = [ChatMessage.model_validate(m) for m in run.state["messages"]]
-    segment = _Segment(spec, deps, messages, pool, step=run.state.get("step", 0))
+    segment = _Segment(spec, deps, messages, pool, step=run.state.get("step", 0), resumed=True)
 
     async def continue_() -> list[Invocation]:
         for call_id in run.state.get("pending", []):
@@ -527,6 +579,20 @@ async def _guard(segment: _Segment, body: Callable[[], Awaitable[list[Invocation
 async def _finish(segment: _Segment, pending: list[Invocation]) -> None:
     spec, deps = segment.spec, segment.deps
     run_status, message_status = _STATUS.get(segment.finish, ("completed", "complete"))
+    cost = deps.pricing.cost(segment.usage)
+    # Time to first token and latency describe answering the question, so only the first
+    # segment sets them; tokens and cost add up across an approval pause.
+    timing: dict[str, Any] = {}
+    if not segment.resumed:
+        timing["latency_ms"] = round((time.perf_counter() - segment.started) * 1000)
+        if segment.first_token_at is not None:
+            timing["ttft_ms"] = round((segment.first_token_at - segment.started) * 1000)
+            RUN_TTFT.labels(spec.model).observe(timing["ttft_ms"] / 1000)
+    RUNS.labels(run_status).inc()
+    LLM_TOKENS.labels(spec.model, "input").inc(segment.usage.tokens_in)
+    LLM_TOKENS.labels(spec.model, "output").inc(segment.usage.tokens_out)
+    LLM_COST.labels(spec.model).inc(cost)
+    CITATIONS_DROPPED.inc(segment.filter.dropped)
     content = "".join(segment.parts)
     message_id: uuid.UUID | None = None
     approvals: list[Approval] = []
@@ -538,7 +604,7 @@ async def _finish(segment: _Segment, pending: list[Invocation]) -> None:
             UsageEvent(
                 tokens_in=segment.usage.tokens_in,
                 tokens_out=segment.usage.tokens_out,
-                cost_usd=deps.pricing.cost(segment.usage),
+                cost_usd=cost,
             )
         )
 
@@ -615,6 +681,10 @@ async def _finish(segment: _Segment, pending: list[Invocation]) -> None:
                 step=segment.step,
                 finished_at=None if approvals else func.now(),
                 error=segment.error.model_dump() if segment.error else None,
+                tokens_in=Run.tokens_in + segment.usage.tokens_in,
+                tokens_out=Run.tokens_out + segment.usage.tokens_out,
+                cost_usd=Run.cost_usd + cost,
+                **timing,
                 state=state,
             )
         )

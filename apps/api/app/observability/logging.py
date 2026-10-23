@@ -9,6 +9,9 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.observability.metrics import HTTP_LATENCY, HTTP_REQUESTS
+from app.observability.tracing import current_trace_id
+
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 REQUEST_ID_HEADER = "x-request-id"
@@ -24,6 +27,8 @@ class JsonFormatter(logging.Formatter):
         }
         if (request_id := request_id_var.get()) is not None:
             entry["request_id"] = request_id
+        if (trace_id := current_trace_id()) is not None:
+            entry["trace_id"] = trace_id
         if record.exc_info:
             entry["exc"] = self.formatException(record.exc_info)
         return json.dumps(entry, ensure_ascii=False)
@@ -70,11 +75,16 @@ class RequestIdMiddleware:
         try:
             await self.app(scope, receive, send_with_id)
         finally:
+            elapsed = time.perf_counter() - start
+            # The route template ("/api/chats/{chat_id}"), never the raw path, to bound cardinality.
+            route = getattr(scope.get("route"), "path", "unmatched")
+            HTTP_REQUESTS.labels(scope["method"], route, str(status)).inc()
+            HTTP_LATENCY.labels(scope["method"], route).observe(elapsed)
             self.log.info(
                 "%s %s %s %.1fms",
                 scope["method"],
                 scope["path"],
                 status,
-                (time.perf_counter() - start) * 1000,
+                elapsed * 1000,
             )
             request_id_var.reset(token)

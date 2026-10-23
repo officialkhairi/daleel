@@ -21,6 +21,7 @@ from app.db.models import Approval, Run
 from app.db.session import tenant_session
 from app.documents.progress import ApprovalNotice, publish
 from app.errors import AppError, NotFound
+from app.observability.metrics import APPROVAL_DECISIONS
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 approver_role = require("approver", "admin")
@@ -123,6 +124,7 @@ async def decide(
             approval.status = "approved"
             approval.reason = body.reason
             action = "approval.edited" if approval.edited_args is not None else "approval.approved"
+        APPROVAL_DECISIONS.labels(approval.tool, action.removeprefix("approval.")).inc()
         approval.decided_by = user_id
         approval.decided_at = func.now()
         await audit.record(

@@ -20,6 +20,7 @@ async def upsert_user(session: AsyncSession, principal: Principal) -> uuid.UUID:
         "email": principal.email,
         "display_name": principal.name,
         "locale": principal.locale,
+        "roles": sorted(principal.roles),
     }
     stmt = (
         insert(User)
