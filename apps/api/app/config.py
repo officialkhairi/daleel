@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 6
     retrieval_rrf_k: int = 60
 
+    # OpenTelemetry: traces go to this OTLP/HTTP endpoint (e.g. http://otel-collector:4318).
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_service_name: str = "daleel-api"
+
     log_level: str = "INFO"
 
 

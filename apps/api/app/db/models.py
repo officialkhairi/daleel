@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
@@ -9,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -48,6 +50,8 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(320))
     display_name: Mapped[str | None] = mapped_column(String(255))
     locale: Mapped[str] = mapped_column(String(8), server_default="en")
+    # Roles from the last token seen (Keycloak is the source of truth; this is for the admin view).
+    roles: Mapped[list[str]] = mapped_column(ARRAY(String(32)), server_default=sql_text("'{}'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -109,6 +113,11 @@ class Run(Base):
     error: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ttft_ms: Mapped[int | None]
+    latency_ms: Mapped[int | None]
+    tokens_in: Mapped[int] = mapped_column(server_default="0")
+    tokens_out: Mapped[int] = mapped_column(server_default="0")
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), server_default="0")
 
 
 EMBEDDING_DIM = 1024  # BAAI/bge-m3
