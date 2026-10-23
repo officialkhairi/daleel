@@ -3,6 +3,10 @@
 A bilingual (Arabic + English) copilot for enterprise documents. Upload policies and contracts, ask questions,
 get streamed answers that cite the exact passage, and let an agent propose actions that a human approves.
 
+![Asking a question, opening the cited passage in the PDF, then approving an email the agent drafted](docs/demo/daleel.gif)
+
+<sub>Recorded with `qwen2.5:3b` on an M1 (native Ollama). Re-record with `e2e/scripts/record-demo.mjs`.</sub>
+
 The full spec is in [docs/PLAN.md](docs/PLAN.md). The project is built in six gated phases.
 
 ## What it covers
