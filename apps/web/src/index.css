@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@daleel/ui/tokens.css";
+@source "../../../packages/ui/src";
 
 @layer base {
   html {

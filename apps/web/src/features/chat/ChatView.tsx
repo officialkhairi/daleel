@@ -1,3 +1,4 @@
+import { Button } from "@daleel/ui";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -182,13 +183,9 @@ export function ChatView({
             </div>
           )}
           {canRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-3 rounded-md border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-brand-soft"
-            >
+            <Button size="sm" className="mt-3" onClick={onRetry}>
               {t("chat.retry")}
-            </button>
+            </Button>
           )}
         </div>
         <div ref={end} />

@@ -57,7 +57,13 @@ export function CitationPanel({ citation, onClose }: { citation: Citation; onClo
         </button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {/* Focusable so keyboard users can scroll the page image (axe: scrollable-region-focusable). */}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={t("citations.passage")}
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+      >
         <blockquote dir="auto" className="mb-4 border-s-2 border-[var(--color-focus)] ps-3 text-sm text-muted">
           {citation.snippet}
         </blockquote>

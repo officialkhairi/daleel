@@ -10,7 +10,7 @@ export function ApprovalsPage() {
   const time = new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" });
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
+    <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus:outline-none">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-8">
         <div>
           <h1 className="text-2xl font-semibold text-ink">{t("approvals.heading")}</h1>

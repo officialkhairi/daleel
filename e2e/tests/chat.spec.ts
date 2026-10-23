@@ -14,9 +14,12 @@ test("an answer cites the document and the citation opens the exact passage", as
   await expect(chip).toBeVisible();
   await expect(page.locator("[aria-busy=true]")).toHaveCount(0);
 
+  // The panel shows whichever document the chip cites (any the officer may read).
+  const cited = /^Source 1: (.+), page \d+$/.exec((await chip.getAttribute("aria-label")) ?? "")?.[1] ?? "";
+  expect(cited).not.toBe("");
   await chip.click();
   const panel = page.getByRole("complementary");
-  await expect(panel.getByRole("heading")).toContainText(/Policy/);
+  await expect(panel.getByRole("heading")).toContainText(cited);
   await expect(panel.locator("canvas")).toBeVisible();
   await expect(panel.getByTestId("highlight").first()).toBeVisible();
 

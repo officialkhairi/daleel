@@ -60,6 +60,25 @@ export function useUpload() {
   });
 }
 
+export function useUpdateAccess() {
+  const token = useAccessToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, roles }: { id: string; roles: Role[] }) => {
+      const response = await apiRequest(`/api/documents/${id}`, token, {
+        method: "PATCH",
+        body: { acl_roles: roles },
+      });
+      return (await response.json()) as DocumentInfo;
+    },
+    onSuccess: (document) => {
+      queryClient.setQueryData<DocumentInfo[]>(documentKeys.list, (list = []) =>
+        list.map((d) => (d.id === document.id ? document : d)),
+      );
+    },
+  });
+}
+
 export function useDeleteDocument() {
   const token = useAccessToken();
   const queryClient = useQueryClient();
