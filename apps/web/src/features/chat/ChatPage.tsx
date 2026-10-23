@@ -95,7 +95,7 @@ export function ChatPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       <ChatList selected={chatId} onSelect={select} />
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main id="main" tabIndex={-1} className="flex min-h-0 flex-1 flex-col focus:outline-none">
         {chat.isError ? (
           <p role="alert" className="p-8 text-danger">
             {t("chat.loadFailed", { message: chat.error.message })}

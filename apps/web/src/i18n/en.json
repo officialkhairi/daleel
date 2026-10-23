@@ -65,7 +65,10 @@
     "documents": "Documents",
     "approvals": "Approvals",
     "pendingCount_one": "{{count}} waiting",
-    "pendingCount_other": "{{count}} waiting"
+    "pendingCount_other": "{{count}} waiting",
+    "admin": "Admin",
+    "skipToComposer": "Skip to the message box",
+    "skipToMain": "Skip to main content"
   },
   "documents": {
     "heading": "Documents",
@@ -100,7 +103,11 @@
       "failed": "Failed",
       "queued": "Queued",
       "processing": "Processing"
-    }
+    },
+    "editAccess": "Access",
+    "accessTitle": "Who can see “{{title}}”?",
+    "accessBody": "Answers stop citing it for anyone who loses access, straight away.",
+    "saveAccess": "Save"
   },
   "citations": {
     "open": "Source {{n}}: {{where}}",
@@ -114,7 +121,8 @@
     "backToPassage": "Back to the passage",
     "loadingPdf": "Loading document…",
     "pdfFailed": "This PDF couldn't be displayed.",
-    "fileFailed": "Couldn't open the document: {{message}}"
+    "fileFailed": "Couldn't open the document: {{message}}",
+    "passage": "Cited passage"
   },
   "errors": {
     "crashTitle": "Something went wrong on this page",
@@ -205,6 +213,68 @@
       "low": "Low",
       "medium": "Medium",
       "high": "High"
+    }
+  },
+  "admin": {
+    "heading": "Administration",
+    "day": "Day",
+    "showTable": "Show as table",
+    "showChart": "Show as chart",
+    "lastDays_one": "Last {{count}} day",
+    "lastDays_other": "Last {{count}} days",
+    "tabs": {
+      "usage": "Usage",
+      "users": "Users",
+      "audit": "Audit log"
+    },
+    "kpi": {
+      "questions": "Questions asked",
+      "documents": "Documents",
+      "users": "Users",
+      "pending": "Waiting for approval",
+      "failureRate": "Failed answers",
+      "cost": "Model cost"
+    },
+    "charts": {
+      "runs": "Answers per day",
+      "ttft": "Time to first word",
+      "tokens": "Model tokens per day",
+      "cost": "Model cost per day"
+    },
+    "series": {
+      "answered": "Answered",
+      "failed": "Failed",
+      "input": "Input",
+      "output": "Output"
+    },
+    "usersNote": "Everyone who has signed in, with the roles their last sign-in carried. Roles are managed in Keycloak.",
+    "auditNote": "Every proposed action, decision and change, newest first. The log can't be edited or deleted.",
+    "filterAction": "Action",
+    "allActions": "All actions",
+    "auditEmpty": "Nothing recorded yet.",
+    "columns": {
+      "name": "Name",
+      "email": "Email",
+      "roles": "Roles",
+      "language": "Language",
+      "lastSeen": "Last seen",
+      "when": "When",
+      "who": "Who",
+      "action": "Action",
+      "details": "Details"
+    },
+    "actions": {
+      "approval.requested": "Action proposed",
+      "approval.approved": "Approved",
+      "approval.edited": "Approved with edits",
+      "approval.rejected": "Rejected",
+      "approval.expired": "Expired",
+      "approval.superseded": "Superseded",
+      "tool.executed": "Action carried out",
+      "tool.failed": "Action failed",
+      "document.uploaded": "Document uploaded",
+      "document.updated": "Document changed",
+      "document.deleted": "Document deleted"
     }
   }
 }

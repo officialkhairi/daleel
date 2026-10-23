@@ -1,3 +1,4 @@
+import { Button } from "@daleel/ui";
 import { useState, type KeyboardEvent, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -49,21 +50,13 @@ export function Composer({ streaming, onSend, onStop }: ComposerProps) {
           className="min-h-12 flex-1 resize-y rounded-md border border-line bg-paper px-3 py-2 text-ink placeholder:text-muted"
         />
         {streaming ? (
-          <button
-            type="button"
-            onClick={onStop}
-            className="rounded-md border border-line px-4 py-2.5 font-medium text-ink hover:bg-brand-soft"
-          >
+          <Button variant="secondary" onClick={onStop}>
             {t("chat.stop")}
-          </button>
+          </Button>
         ) : (
-          <button
-            type="submit"
-            disabled={!content}
-            className="rounded-md bg-brand px-4 py-2.5 font-medium text-brand-ink hover:opacity-90 disabled:opacity-40"
-          >
+          <Button type="submit" variant="primary" disabled={!content}>
             {t("chat.send")}
-          </button>
+          </Button>
         )}
       </div>
       <p id="composer-hint" className="mx-auto mt-1 max-w-3xl text-xs text-muted">

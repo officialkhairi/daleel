@@ -29,3 +29,19 @@
     --color-danger: #f08a7f;
   }
 }
+
+/* Charts: the first two slots of the validated reference palette (both modes checked with the
+   dataviz validator), plus the brand for single-series charts. Failures use --color-danger. */
+@theme {
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-chart-grid: #e3e9e8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-series-1: #3987e5;
+    --color-series-2: #d95926;
+    --color-chart-grid: #22363b;
+  }
+}

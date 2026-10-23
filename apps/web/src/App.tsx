@@ -1,9 +1,11 @@
+import { Button } from "@daleel/ui";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { MouseEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAuth } from "./features/auth/AuthProvider";
 import { SignInScreen } from "./features/auth/SignInScreen";
+import { AdminPage } from "./features/admin/AdminPage";
 import { usePendingApprovals } from "./features/approvals/api";
 import { ApprovalsPage } from "./features/approvals/ApprovalsPage";
 import { ChatPage } from "./features/chat/ChatPage";
@@ -50,9 +52,23 @@ function Shell() {
   const isApprover = me.data?.roles.some((r) => r === "approver" || r === "admin") ?? false;
   const pending = usePendingApprovals(isApprover);
   const pendingCount = pending.data?.length ?? 0;
-  const page = path.startsWith("/documents") ? "documents" : path.startsWith("/approvals") && isApprover ? "approvals" : "chat";
+  const isAdmin = me.data?.roles.includes("admin") ?? false;
+  const page = path.startsWith("/documents")
+    ? "documents"
+    : path.startsWith("/approvals") && isApprover
+      ? "approvals"
+      : path.startsWith("/admin") && isAdmin
+        ? "admin"
+        : "chat";
   return (
     <div className="flex h-dvh flex-col">
+      {/* First stop for keyboard users: past the header and chat list (WCAG 2.4.1). */}
+      <a
+        href={page === "chat" ? "#composer" : "#main"}
+        className="sr-only z-50 rounded-md bg-surface px-4 py-2 text-ink focus:not-sr-only focus:fixed focus:start-4 focus:top-4"
+      >
+        {page === "chat" ? t("nav.skipToComposer") : t("nav.skipToMain")}
+      </a>
       <header className="border-b border-line bg-surface">
         <div className="flex items-center gap-4 px-4 py-3 sm:px-6">
           <span className="flex items-baseline gap-2 text-lg font-semibold text-brand">
@@ -79,21 +95,30 @@ function Shell() {
                 )}
               </NavLink>
             )}
+            {isAdmin && (
+              <NavLink href="/admin" current={page === "admin"}>
+                {t("nav.admin")}
+              </NavLink>
+            )}
           </nav>
           <div className="ms-auto flex items-center gap-2">
             <LanguageToggle />
             <ProfileDialog />
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink hover:bg-brand-soft"
-            >
+            <Button size="sm" onClick={() => void signOut()}>
               {t("header.signOut")}
-            </button>
+            </Button>
           </div>
         </div>
       </header>
-      {page === "documents" ? <DocumentsPage /> : page === "approvals" ? <ApprovalsPage /> : <ChatPage />}
+      {page === "documents" ? (
+        <DocumentsPage />
+      ) : page === "approvals" ? (
+        <ApprovalsPage />
+      ) : page === "admin" ? (
+        <AdminPage />
+      ) : (
+        <ChatPage />
+      )}
     </div>
   );
 }

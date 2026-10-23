@@ -1,9 +1,19 @@
+import { Button } from "@daleel/ui";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useRef, useState, type DragEvent, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useMe } from "../profile/useMe";
-import { ROLES, useDeleteDocument, useDocuments, useUpload, type DocumentInfo, type Role } from "./api";
+import {
+  ROLES,
+  useDeleteDocument,
+  useDocuments,
+  useUpdateAccess,
+  useUpload,
+  type DocumentInfo,
+  type Role,
+} from "./api";
 
 const ACCEPT = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -141,13 +151,9 @@ function UploadCard() {
           {upload.error.message}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={!file || upload.isPending}
-        className="mt-4 rounded-md bg-brand px-4 py-2 font-medium text-brand-ink hover:opacity-90 disabled:opacity-40"
-      >
+      <Button type="submit" variant="primary" className="mt-4" disabled={!file || upload.isPending}>
         {upload.isPending ? t("documents.uploading") : t("documents.upload")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -178,6 +184,84 @@ function Status({ document }: { document: DocumentInfo }) {
         <span className="block h-full bg-brand transition-[width]" style={{ width: `${document.progress}%` }} />
       </span>
     </span>
+  );
+}
+
+function AccessButton({ document }: { document: DocumentInfo }) {
+  const { t } = useTranslation();
+  const update = useUpdateAccess();
+  const [open, setOpen] = useState(false);
+  const [roles, setRoles] = useState<Role[]>(document.acl_roles);
+  const toggle = (role: Role) => {
+    setRoles((current) => (current.includes(role) ? current.filter((r) => r !== role) : [...current, role]));
+  };
+  return (
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setRoles(document.acl_roles);
+      }}
+    >
+      <Dialog.Trigger asChild>
+        <button type="button" className="rounded-md px-2 py-1 text-sm text-ink hover:bg-brand-soft">
+          {t("documents.editAccess")}
+          <span className="sr-only"> {document.title}</span>
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-ink/40" />
+        <Dialog.Content className="fixed inset-x-4 top-24 mx-auto max-w-md rounded-lg bg-surface p-6 shadow-lg">
+          <Dialog.Title className="text-lg font-semibold text-ink" dir="auto">
+            {t("documents.accessTitle", { title: document.title })}
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-sm text-muted">{t("documents.accessBody")}</Dialog.Description>
+          <fieldset className="mt-4 flex flex-col gap-2">
+            <legend className="sr-only">{t("documents.accessLabel")}</legend>
+            {ROLES.map((role) => (
+              <label key={role} className="flex items-center gap-2 text-ink">
+                <input
+                  type="checkbox"
+                  checked={role === "admin" || roles.includes(role)}
+                  disabled={role === "admin"}
+                  onChange={() => {
+                    toggle(role);
+                  }}
+                  className="size-4 accent-[var(--color-brand)]"
+                />
+                {t(`roles.${role}`)}
+              </label>
+            ))}
+          </fieldset>
+          {update.isError && (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {update.error.message}
+            </p>
+          )}
+          <div className="mt-6 flex justify-end gap-2">
+            <Dialog.Close asChild>
+              <Button>{t("documents.cancel")}</Button>
+            </Dialog.Close>
+            <Button
+              variant="primary"
+              disabled={update.isPending}
+              onClick={() => {
+                update.mutate(
+                  { id: document.id, roles },
+                  {
+                    onSuccess: () => {
+                      setOpen(false);
+                    },
+                  },
+                );
+              }}
+            >
+              {t("documents.saveAccess")}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -230,7 +314,7 @@ export function DocumentsPage() {
   const canEdit = me.data?.roles.some((r) => r === "editor" || r === "admin") ?? false;
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
+    <main id="main" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus:outline-none">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-8 sm:px-8">
         <div>
           <h1 className="text-2xl font-semibold text-ink">{t("documents.heading")}</h1>
@@ -300,7 +384,8 @@ export function DocumentsPage() {
                           )}
                     </td>
                     {canEdit && (
-                      <td className="py-3">
+                      <td className="flex gap-1 py-3">
+                        <AccessButton document={d} />
                         <DeleteButton document={d} />
                       </td>
                     )}

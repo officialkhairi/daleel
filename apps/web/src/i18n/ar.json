@@ -69,7 +69,10 @@
     "pendingCount_two": "طلبان بانتظار",
     "pendingCount_few": "{{count}} طلبات بانتظار",
     "pendingCount_many": "{{count}} طلبًا بانتظار",
-    "pendingCount_other": "{{count}} طلب بانتظار"
+    "pendingCount_other": "{{count}} طلب بانتظار",
+    "admin": "الإدارة",
+    "skipToComposer": "انتقل إلى مربع الرسالة",
+    "skipToMain": "انتقل إلى المحتوى الرئيسي"
   },
   "documents": {
     "heading": "المستندات",
@@ -108,7 +111,11 @@
       "failed": "فشل",
       "queued": "في الانتظار",
       "processing": "قيد المعالجة"
-    }
+    },
+    "editAccess": "الوصول",
+    "accessTitle": "من يمكنه رؤية «{{title}}»؟",
+    "accessBody": "تتوقف الإجابات عن الاستشهاد به فورًا لمن يفقد الوصول.",
+    "saveAccess": "حفظ"
   },
   "citations": {
     "open": "المصدر {{n}}: {{where}}",
@@ -122,7 +129,8 @@
     "backToPassage": "العودة إلى المقطع",
     "loadingPdf": "جارٍ تحميل المستند…",
     "pdfFailed": "تعذّر عرض ملف PDF هذا.",
-    "fileFailed": "تعذّر فتح المستند: {{message}}"
+    "fileFailed": "تعذّر فتح المستند: {{message}}",
+    "passage": "المقطع المستشهد به"
   },
   "errors": {
     "crashTitle": "حدث خطأ في هذه الصفحة",
@@ -213,6 +221,72 @@
       "low": "منخفضة",
       "medium": "متوسطة",
       "high": "عالية"
+    }
+  },
+  "admin": {
+    "heading": "الإدارة",
+    "day": "اليوم",
+    "showTable": "عرض كجدول",
+    "showChart": "عرض كرسم بياني",
+    "lastDays_zero": "آخر {{count}} يوم",
+    "lastDays_one": "آخر يوم",
+    "lastDays_two": "آخر يومين",
+    "lastDays_few": "آخر {{count}} أيام",
+    "lastDays_many": "آخر {{count}} يومًا",
+    "lastDays_other": "آخر {{count}} يوم",
+    "tabs": {
+      "usage": "الاستخدام",
+      "users": "المستخدمون",
+      "audit": "سجل التدقيق"
+    },
+    "kpi": {
+      "questions": "الأسئلة",
+      "documents": "المستندات",
+      "users": "المستخدمون",
+      "pending": "بانتظار الموافقة",
+      "failureRate": "إجابات فشلت",
+      "cost": "تكلفة النموذج"
+    },
+    "charts": {
+      "runs": "الإجابات يوميًا",
+      "ttft": "زمن أول كلمة",
+      "tokens": "رموز النموذج يوميًا",
+      "cost": "تكلفة النموذج يوميًا"
+    },
+    "series": {
+      "answered": "أُجيبت",
+      "failed": "فشلت",
+      "input": "المدخلات",
+      "output": "المخرجات"
+    },
+    "usersNote": "كل من سجّل الدخول، مع الأدوار التي حملها آخر دخول له. تُدار الأدوار في Keycloak.",
+    "auditNote": "كل إجراء مقترح وكل قرار وتغيير، الأحدث أولًا. لا يمكن تعديل السجل أو حذفه.",
+    "filterAction": "الإجراء",
+    "allActions": "كل الإجراءات",
+    "auditEmpty": "لم يُسجَّل شيء بعد.",
+    "columns": {
+      "name": "الاسم",
+      "email": "البريد الإلكتروني",
+      "roles": "الأدوار",
+      "language": "اللغة",
+      "lastSeen": "آخر ظهور",
+      "when": "الوقت",
+      "who": "من",
+      "action": "الإجراء",
+      "details": "التفاصيل"
+    },
+    "actions": {
+      "approval.requested": "اقتُرح إجراء",
+      "approval.approved": "تمت الموافقة",
+      "approval.edited": "تمت الموافقة مع تعديلات",
+      "approval.rejected": "رُفض",
+      "approval.expired": "انتهت المهلة",
+      "approval.superseded": "استُبدل",
+      "tool.executed": "نُفذ الإجراء",
+      "tool.failed": "فشل الإجراء",
+      "document.uploaded": "رُفع مستند",
+      "document.updated": "عُدّل مستند",
+      "document.deleted": "حُذف مستند"
     }
   }
 }

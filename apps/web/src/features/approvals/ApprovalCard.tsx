@@ -1,3 +1,4 @@
+import { Badge, Button } from "@daleel/ui";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,11 +14,7 @@ interface ApprovalCardProps {
   context?: React.ReactNode;
 }
 
-const RISK_STYLE = {
-  low: "bg-brand-soft text-brand",
-  medium: "bg-[var(--color-focus)]/20 text-ink",
-  high: "bg-danger/15 text-danger",
-} as const;
+const RISK_TONE = { low: "brand", medium: "warning", high: "danger" } as const;
 
 export function ApprovalCard({ approval, canDecide, onDecided, context }: ApprovalCardProps) {
   const { t } = useTranslation();
@@ -62,9 +59,7 @@ export function ApprovalCard({ approval, canDecide, onDecided, context }: Approv
     >
       <header className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold text-ink">{t(`tools.${approval.tool}.propose`)}</h3>
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${RISK_STYLE[approval.risk]}`}>
-          {t(`approvals.risk.${approval.risk}`)}
-        </span>
+        <Badge tone={RISK_TONE[approval.risk]}>{t(`approvals.risk.${approval.risk}`)}</Badge>
         <span className="ms-auto text-sm text-muted" role={pending ? undefined : "status"}>
           {statusLine}
         </span>
@@ -101,26 +96,24 @@ export function ApprovalCard({ approval, canDecide, onDecided, context }: Approv
             </p>
           )}
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               disabled={decide.isPending}
               onClick={() => {
                 submit("approve");
               }}
-              className="rounded-md bg-brand px-4 py-2 font-medium text-brand-ink hover:opacity-90 disabled:opacity-40"
             >
               {edited ? t("approvals.approveEdited") : t("approvals.approve")}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
               disabled={decide.isPending}
               onClick={() => {
                 submit("reject");
               }}
-              className="rounded-md border border-line px-4 py-2 font-medium text-danger hover:bg-brand-soft disabled:opacity-40"
             >
               {t("approvals.reject")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

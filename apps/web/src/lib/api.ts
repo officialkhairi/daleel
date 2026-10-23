@@ -23,7 +23,7 @@ function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
