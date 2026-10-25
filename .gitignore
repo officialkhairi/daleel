@@ -28,3 +28,6 @@ htmlcov/
 test-results/
 playwright-report/
 storybook-static/
+
+# Recorded walkthrough (e2e/scripts/record-video.mjs); too large for git
+docs/demo/*.webm
