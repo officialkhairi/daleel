@@ -18,7 +18,7 @@ and reviewers need to run the whole system with one command.
 - **Postgres row-level security for tenancy**, with the API connecting as a role that cannot bypass it, so a
   missing `WHERE tenant_id = …` cannot leak data.
 - **No LLM framework.** The provider contract (`app/llm/base.py`), agent loop, SSE protocol and citations are
-  hand-written (see CLAUDE.md).
+  hand-written, so each one can be read and tested on its own.
 
 ## Consequences
 

@@ -22,7 +22,8 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
-.claude/settings.local.json
+.claude/
+CLAUDE.md
 
 # playwright
 test-results/

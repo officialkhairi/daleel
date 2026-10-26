@@ -291,3 +291,7 @@ deploy/compose   docker-compose.yml, Keycloak realm, Postgres init, observabilit
 deploy/helm      Helm chart (kind smoke test values in ci/)
 docs             PLAN.md, ARCHITECTURE.md, adr/, demo/ (sample policies)
 ```
+
+## License
+
+[MIT](LICENSE)

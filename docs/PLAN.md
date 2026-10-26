@@ -1,4 +1,4 @@
-# Daleel — Build Plan (spec for Claude Code)
+# Daleel — Build Plan
 
 ## Demo story (what must work at the end)
 A compliance officer logs in via SSO, uploads an Arabic procurement policy (live ingestion progress), asks in English
